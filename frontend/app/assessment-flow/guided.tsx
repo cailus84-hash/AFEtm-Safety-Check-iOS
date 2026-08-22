@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
-import { createAssessment, fetchProfile, getDeviceId } from '@/src/lib/api';
+import { createAssessment, fetchProfile, getDeviceId, UpstreamError } from '@/src/lib/api';
 
 // Capture windows (seconds elapsed since t=0 of recovery)
 // Each window averages the readings during the LAST 5s of the segment
@@ -182,7 +182,15 @@ export default function Guided() {
         await hr.disconnect().catch(() => {});
         router.replace(`/assessment/${res.id}`);
       } catch (e: any) {
-        setErrorMsg(e?.message || 'No se pudo calcular la evaluación.');
+        if (e instanceof UpstreamError) {
+          setErrorMsg(
+            `Servidor autoritativo AFEtm rechazó la solicitud (HTTP ${e.upstream_status}). ` +
+            `Detalle: ${e.upstream_body?.slice(0, 200) || e.message}. ` +
+            `La evaluación NO se guardó.`
+          );
+        } else {
+          setErrorMsg(e?.message || 'No se pudo calcular la evaluación.');
+        }
         setPhase('error');
       }
     })();

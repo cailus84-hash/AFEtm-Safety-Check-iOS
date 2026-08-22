@@ -1,0 +1,39 @@
+{
+  "summary": "ITERATION 6 BLOCKER RESOLVED. The fix (HTTP 502→424 + code-based client detection) works end-to-end across BOTH localhost:8001 AND the public Cloudflare/K8s ingress (https://safety-check-mvp.preview.emergentagent.com). 12/12 pytest tests PASS. Verified via direct curl and parametric tests: POST /api/assessments and POST /api/assessments/{aid}/resync return HTTP 424 with Content-Type: application/json and body literally containing 'AUTHORITATIVE_UPSTREAM_ERROR' from BOTH origins — the ingress no longer rewrites the response. Full envelope preserved end-to-end: {detail:{code:'AUTHORITATIVE_UPSTREAM_ERROR', message:<Spanish>, upstream_url:'https://pulso-activo--cailus84.replit.app/api/assessments', upstream_status:401, upstream_body:'{\"message\":\"Unauthorized\"}'}}. Ghost-record guard verified via localhost pre/post GET (count unchanged via both origins). Resync path leaves DB record untouched (calc_source=pending, zone/pattern=null, calc_notice unchanged). Secondary paths unchanged: (a) empty token → 200 pending + Spanish notice, (b) unreachable URL → 200 pending + 'Sin red al servidor autoritativo' suffix, (c) GET /api/ reports upstream_configured=true and calc_source_default=authoritative. Static audit confirms: server.py contains two `status_code=424` sites (create + resync), zero zone thresholds, no calc_assessment, no BLUE/GREEN/YELLOW/RED literals; api.ts uses status-agnostic gate `detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR'` (also accepts detail.upstream_status+upstream_body as fallback) and no longer has `res.status === 502` in the code path. Math-only calc (FCP, HRR, RECpct, AURC, tau) still faithful. retest_needed=false.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_afetm_ingress_424.py",
+    "/app/test_reports/pytest/afetm_ingress_424.xml"
+  ],
+  "action_items": [
+    "None. Iteration 6 CRITICAL blocker is resolved. Main agent may proceed to end-to-end mobile UI verification (manual.tsx / guided.tsx / assessment/[id].tsx) — the JSON envelope is now guaranteed to reach the client through the ingress, so UpstreamError will be raised and Spanish error banners will render with HTTP 401 upstream body content."
+  ],
+  "critical_code_review_comments": [
+    "server.py:285-295 create_assessment now raises HTTPException(status_code=424, detail={code:'AUTHORITATIVE_UPSTREAM_ERROR', ...}) — ingress preserves 424 with JSON body verified via curl AND parametric pytest.",
+    "server.py:355-362 resync_assessment mirrors the 424 contract with a slightly different Spanish message ('rechazó la re-sincronización') — DB record unchanged on failure (verified by pre/post GET).",
+    "api.ts:106-113 req() gate is now status-agnostic: throws UpstreamError whenever `detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR'` OR the envelope shape matches (upstream_status/upstream_body present). This is robust to any future ingress status swap.",
+    "api.ts no longer contains the string 'res.status === 502' — verified by static test.",
+    "server.py _call_upstream still correctly separates network failures (→ pending) from non-200 auth failures (→ 424) — TestNetworkFailurePending PASSES."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_afetm_ingress_424.py (new — 12 parametric tests, all PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12) — both localhost and public ingress",
+    "frontend": "static audit 100% (code-based UpstreamError detection verified; api.ts, manual.tsx, guided.tsx, assessment/[id].tsx unchanged from iteration 6 audit)"
+  },
+  "seed_data_creation": "Test data prefixed TEST_ (TEST_ingress424_01, TEST_resync424_seed, TEST_unconf424_01, TEST_netfail424_01). Pending seed record deleted at teardown. /app/backend/.env restored to original via module-scoped fixture; backend restarted after each mutation.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_afetm_ingress_424.py. It MUST run serially with `-n 0` because tests mutate /app/backend/.env and restart supervisor (pytest.ini defaults to -n 2 loadscope which causes parallel worker races on the shared .env). Run with: `EXPO_BACKEND_URL=https://safety-check-mvp.preview.emergentagent.com python -m pytest backend/tests/test_afetm_ingress_424.py -v -n 0`. If the ingress ever regresses (e.g., starts rewriting 424 too), the parametric public_ingress tests will fail first with an assertion about Content-Type / literal 'AUTHORITATIVE_UPSTREAM_ERROR' missing from body. Iteration 6's blocker test file /app/backend/tests/test_afetm_strict_upstream.py is now OBSOLETE (asserts 502) — can be deleted or updated by main agent.",
+  "rca_of_issue": "RESOLVED. Root cause was Cloudflare/K8s ingress silently substituting the origin's HTTP 502 application/json response with its own HTML 502 'Bad gateway' page. FIX: server.py now raises 424 Failed Dependency (semantically correct: request failed because a dependency failed) which the ingress does NOT intercept. VERIFIED with curl: `curl -X POST https://safety-check-mvp.preview.emergentagent.com/api/assessments ...` → 424 application/json with the exact JSON envelope including the literal string 'AUTHORITATIVE_UPSTREAM_ERROR'. Client-side robustness: api.ts req() no longer gates on HTTP status — it inspects `detail.code` (with envelope-shape fallback), so any future status swap remains transparent to the mobile app."
+}

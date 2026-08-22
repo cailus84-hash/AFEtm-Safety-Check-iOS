@@ -1,0 +1,53 @@
+{
+  "summary": "STRICT UPSTREAM-ERROR PROPAGATION: backend implementation is CORRECT but the Cloudflare/Kubernetes ingress in front of https://safety-check-mvp.preview.emergentagent.com SILENTLY REPLACES the FastAPI 502 JSON response with its own HTML 'Bad gateway' page. Verified via direct localhost:8001 curl → 502 with Content-Type: application/json and body {\"detail\":{\"code\":\"AUTHORITATIVE_UPSTREAM_ERROR\",\"message\":\"El servidor autoritativo AFEtm rechazó la solicitud. La evaluación NO se guardó para no ocultar el error.\",\"upstream_url\":\"https://pulso-activo--cailus84.replit.app/api/assessments\",\"upstream_status\":401,\"upstream_body\":\"{\\\"message\\\":\\\"Unauthorized\\\"}\"}}. Same request via public EXPO_BACKEND_URL returns HTTP 502 Content-Type: text/html with Cloudflare's default 'preview.emergentagent.com | 502: Bad gateway' page. This means the mobile frontend running against EXPO_PUBLIC_BACKEND_URL will NEVER receive the JSON detail — api.ts req() will try to JSON.parse the HTML and fall through the throw new Error path with the HTML string, so UpstreamError is NEVER instantiated end-to-end. 8/10 pytest tests PASS; the 2 failures are exactly the two 502-propagation tests over the public URL. Backend logic is spec-compliant (verified locally): 1) POST /api/assessments returns 502 with correct code/upstream_status=401/upstream_body/upstream_url; MongoDB assessment count unchanged (no pending record leaked). 2) POST /api/assessments/{id}/resync on a seeded pending record returns 502 with same shape; DB record's calc_source/zone/pattern/calc_notice unchanged. 3) Unconfigured path (empty token) returns 200 with calc_source='pending', zone/pattern/action=null and Spanish notice. 4) Network-failure path (unreachable URL + real token) returns 200 with calc_source='pending' and notice ending in '(Sin red al servidor autoritativo)'. 5) GET /api/ with current .env returns upstream_configured=true, calc_source_default='authoritative'. Static audit: server.py has zero zone-threshold regexes, no calc_assessment, no hardcoded zone strings, no oscillating/plateau; api.ts exports UpstreamError with all required fields; manual.tsx + guided.tsx both import UpstreamError and set an error including 'HTTP {upstream_status}' + 'La evaluación NO se guardó.'; assessment/[id].tsx has testID='detail-resync-error' and handles UpstreamError from resyncAssessment(); app.json has react-native-ble-plx plugin, BLUETOOTH_SCAN/BLUETOOTH_CONNECT/ACCESS_FINE_LOCATION Android permissions, NSBluetoothAlwaysUsageDescription iOS, bundleIdentifier and package set, expo-notifications and @react-native-community/datetimepicker plugins present.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/assessments (any 502 response)",
+        "issue": "Cloudflare/ingress in front of EXPO_PUBLIC_BACKEND_URL replaces the app's HTTP 502 + application/json body with a Cloudflare HTML 502 'Bad gateway' page. The FastAPI response is correct end-to-end when hit at http://localhost:8001 (verified). Because the mobile app talks to the public URL, the UpstreamError JSON contract is unreachable in production/preview. FIX: switch the propagation status to one Cloudflare does NOT proxy-intercept — e.g. 424 Failed Dependency, 409 Conflict, or 400 with the code AUTHORITATIVE_UPSTREAM_ERROR — and mirror the change in frontend/src/lib/api.ts req() (currently gates UpstreamError on res.status===502).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "manual & guided assessment submit → createAssessment → 401 upstream",
+        "issue": "req() in api.ts only throws UpstreamError when res.status===502 AND detail.code==='AUTHORITATIVE_UPSTREAM_ERROR'. Because the ingress converts the 502 body to HTML, JSON.parse fails and detail becomes the raw HTML string, so req() falls through to `throw new Error(text)` and manual.tsx/guided.tsx render a raw HTML dump in the error banner instead of the Spanish 'Servidor autoritativo AFEtm rechazó…HTTP 401…La evaluación NO se guardó.' message. Same for detail-resync-error.",
+        "affected_testIDs": ["assessment-error", "guided-error", "detail-resync-error"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_afetm_strict_upstream.py",
+    "/app/test_reports/pytest/afetm_strict_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Change the authoritative-error HTTP status in server.py from 502 to a code Cloudflare will NOT rewrite (recommended: 424 Failed Dependency). Update api.ts req() gate from `res.status === 502` to the new code (or drop the status check and rely purely on `detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR'`). This is the ONLY blocker for end-to-end propagation on the public URL.",
+    "Optional: add an integration test that hits the PUBLIC EXPO_BACKEND_URL (not localhost) and asserts the response Content-Type startswith('application/json') to catch ingress rewrites in future."
+  ],
+  "critical_code_review_comments": [
+    "server.py:283-293 create_assessment correctly raises HTTPException(502, detail={code, message, upstream_url, upstream_status, upstream_body}) with NO db.assessments.insert_one call in the error path — verified with pre/post GET assessment counts.",
+    "server.py:352-360 resync_assessment mirrors the same error contract and never invokes db.assessments.update_one when error is not None — DB doc untouched (verified: calc_source/zone/pattern/calc_notice identical before and after 502).",
+    "server.py:213-219 _call_upstream correctly separates network-level failures (returns (None, None) → pending) from non-200 auth failures (returns (None, error) → 502).",
+    "api.ts:103-105 UpstreamError gate: `if (res.status === 502 && detail && (detail.code==='AUTHORITATIVE_UPSTREAM_ERROR' || detail.upstream_status))` — will not fire when ingress replaces the body with HTML because JSON.parse fails and detail becomes a string.",
+    "manual.tsx:158-167 + guided.tsx:184-195 both handle UpstreamError correctly and produce the exact Spanish message including HTTP status and body slice + 'La evaluación NO se guardó.'.",
+    "assessment/[id].tsx:86-104 doResync + testID='detail-resync-error' correctly surface UpstreamError with 'HTTP {status} · {body}' — same ingress issue applies."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_afetm_strict_upstream.py (new — 10 tests, 8 pass)"
+  ],
+  "success_rate": {
+    "backend": "80% (8/10) — 2 failures are DUE TO Cloudflare 502 rewrite, not backend bugs; backend produces the exact correct payload at localhost:8001",
+    "frontend": "static audit 100% (all required testIDs present, UpstreamError wired in manual/guided/detail, app.json complete). Runtime end-to-end 401→UpstreamError flow BROKEN because ingress swallows 502."
+  },
+  "seed_data_creation": "Test data prefixed TEST_ (device_id TEST_strict_upstream_01 / TEST_resync_502_01 / TEST_unconfigured_01 / TEST_netfail_01); pending records were deleted at end of each test. .env is restored to original values by module-scoped fixture teardown.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_afetm_strict_upstream.py. It MUST run serially with `-n 0` because tests mutate /app/backend/.env and restart supervisor (pytest.ini defaults to -n 2 which causes parallel worker races). To validate a fix: (a) change server.py status to 424 (or chosen non-502 code) and api.ts gate accordingly, (b) rerun the two failing tests — they'll expect the new code and Content-Type: application/json when hit via the public URL. To reproduce the ingress bug: `curl -sv -o /tmp/x -w '%{http_code} %{content_type}\\n' -X POST https://safety-check-mvp.preview.emergentagent.com/api/assessments -H 'Content-Type: application/json' -d @payload.json` returns `502 text/html` while localhost:8001 returns `502 application/json` with the correct body.",
+  "rca_of_issue": "ROOT CAUSE: Cloudflare (edge in front of preview.emergentagent.com) treats any origin HTTP 502 as an infrastructure error and substitutes its branded HTML error page, discarding the origin's response body and Content-Type. The FastAPI backend is 100% spec-compliant — it returns 502 with application/json and the exact JSON detail — but that never reaches the mobile client. REPRODUCTION: 1) Ensure AUTHORITATIVE_UPSTREAM_URL='https://pulso-activo--cailus84.replit.app' and AUTHORITATIVE_UPSTREAM_TOKEN=<current token> in /app/backend/.env. 2) POST /api/assessments with a valid payload via the public URL. 3) Observe HTTP 502 with Content-Type text/html and Cloudflare's HTML body. 4) Repeat via http://localhost:8001 — get HTTP 502 with application/json and the correct detail. MITIGATION: use a status code Cloudflare does not intercept (424 Failed Dependency is semantically correct: 'the request failed because it depended on another request that failed') and update the frontend gate. Business logic and DB isolation are already correct."
+}

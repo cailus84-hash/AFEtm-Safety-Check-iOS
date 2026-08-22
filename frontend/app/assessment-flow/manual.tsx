@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
-import { createAssessment, fetchProfile, getDeviceId } from '@/src/lib/api';
+import { createAssessment, fetchProfile, getDeviceId, UpstreamError } from '@/src/lib/api';
 
 const TIMES = ['0', '60', '90', '120', '150', '180'] as const;
 
@@ -156,7 +156,15 @@ export default function NewAssessment() {
       });
       router.replace(`/assessment/${res.id}`);
     } catch (e: any) {
-      setError(e?.message || 'No se pudo calcular la evaluación.');
+      if (e instanceof UpstreamError) {
+        setError(
+          `Servidor autoritativo AFEtm rechazó la solicitud (HTTP ${e.upstream_status}). ` +
+          `Detalle: ${e.upstream_body?.slice(0, 200) || e.message}. ` +
+          `La evaluación NO se guardó.`
+        );
+      } else {
+        setError(e?.message || 'No se pudo calcular la evaluación.');
+      }
     } finally {
       setSubmitting(false);
     }

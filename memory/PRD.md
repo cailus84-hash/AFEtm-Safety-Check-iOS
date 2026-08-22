@@ -6,6 +6,13 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
+## Scope (v7 — strict authoritative propagation)
+- Backend uses HTTP **424 Failed Dependency** (not 502 — the K8s/Cloudflare ingress rewrites 502 into HTML) to surface authoritative-upstream failures with the exact `{code:'AUTHORITATIVE_UPSTREAM_ERROR', upstream_status, upstream_body, upstream_url}` envelope.
+- Frontend `UpstreamError` detection is **code-based** (`detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR'`) — robust to any future status swap.
+- When upstream is configured AND returns non-200 → **HTTP 424 is returned to the caller, MongoDB is NOT written**. No local classification, no hidden pending fallback.
+- When upstream is configured but network fails (DNS/connect) → 200 pending with `"(Sin red al servidor autoritativo)"` suffix (preserves field measurements).
+- When upstream is unconfigured → 200 pending (documented behavior).
+
 ## Scope (v6 — strict authoritative-only classification)
 - **REMOVED all locally invented thresholds** (Blue≥65 / Green≥40 / Yellow≥25 / Red<25). The backend no longer contains any classification decision code.
 - `POST /api/assessments` behaviour:

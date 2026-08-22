@@ -187,16 +187,18 @@ async def get_profile(device_id: str = Query(...)):
     return doc
 
 
-async def _try_upstream_compute(a: "AssessmentIn") -> Optional[dict]:
+async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[dict]]:
     """Delegate calculation to the authoritative upstream server.
 
-    Returns a dict with the derived fields (fcp_target, hr_peak, hrr,
-    recpct, aurc, tau, pattern, zone, action, fcpv_total, context_flag)
-    on success, or None on any auth/network/parse failure so the caller
-    can gracefully fall back to the reference mirror.
+    Returns a tuple ``(derived, error)`` where exactly one is populated:
+      - ``derived`` is the classification payload on HTTP 200
+      - ``error`` is ``{upstream_status, upstream_body, upstream_url}`` on
+        any non-200 response (never falls back — the caller decides).
+    Only network / configuration failures return ``(None, None)`` so the
+    caller can treat them as "pending".
     """
     if not AUTHORITATIVE_UPSTREAM_URL or not AUTHORITATIVE_UPSTREAM_TOKEN:
-        return None
+        return None, None
     url = f"{AUTHORITATIVE_UPSTREAM_URL}/api/assessments"
     headers = {
         "Content-Type": "application/json",
@@ -209,66 +211,102 @@ async def _try_upstream_compute(a: "AssessmentIn") -> Optional[dict]:
         "fcpv": a.fcpv.model_dump(),
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with httpx.AsyncClient(timeout=15.0) as c:
             r = await c.post(url, headers=headers, json=payload)
-        if r.status_code >= 400:
-            logging.warning("Upstream returned %s: %s", r.status_code, r.text[:200])
-            return None
-        data = r.json()
-        # Accept several field shapes: keep what we can identify.
-        derived = {
-            "fcp_target": data.get("fcp_target") or data.get("fcp"),
-            "hr_peak": data.get("hr_peak") or a.readings.get("0"),
-            "hrr": data.get("hrr"),
-            "recpct": data.get("recpct"),
-            "aurc": data.get("aurc"),
-            "tau": data.get("tau"),
-            "pattern": data.get("pattern"),
-            "zone": data.get("zone"),
-            "action": data.get("action") or "",
-            "fcpv_total": data.get("fcpv_total")
-                or int(sum(a.fcpv.model_dump().values())),
-            "context_flag": data.get("context_flag", False),
-        }
-        # Reject if any critical field is missing.
-        for k in ("fcp_target", "hrr", "recpct", "pattern", "zone"):
-            if derived.get(k) in (None, ""):
-                logging.warning("Upstream response missing '%s' — falling back", k)
-                return None
-        return derived
     except Exception as e:
-        logging.warning("Upstream call failed: %s", e)
-        return None
+        logging.warning("Upstream network failure: %s", e)
+        # Network-level failure — treat as pending (temporary).
+        return None, None
+    if r.status_code != 200:
+        body = r.text[:2000]
+        logging.warning("Upstream %s: %s", r.status_code, body[:200])
+        return None, {
+            "upstream_url": url,
+            "upstream_status": r.status_code,
+            "upstream_body": body,
+        }
+    try:
+        data = r.json()
+    except Exception:
+        return None, {
+            "upstream_url": url,
+            "upstream_status": r.status_code,
+            "upstream_body": r.text[:2000],
+        }
+    derived = {
+        "fcp_target": data.get("fcp_target") or data.get("fcp"),
+        "hr_peak": data.get("hr_peak") or a.readings.get("0"),
+        "hrr": data.get("hrr"),
+        "recpct": data.get("recpct"),
+        "aurc": data.get("aurc"),
+        "tau": data.get("tau"),
+        "pattern": data.get("pattern"),
+        "zone": data.get("zone"),
+        "action": data.get("action") or "",
+        "fcpv_total": data.get("fcpv_total")
+            or int(sum(a.fcpv.model_dump().values())),
+        "context_flag": data.get("context_flag", False),
+    }
+    for k in ("fcp_target", "hrr", "recpct", "pattern", "zone"):
+        if derived.get(k) in (None, ""):
+            return None, {
+                "upstream_url": url,
+                "upstream_status": r.status_code,
+                "upstream_body": r.text[:2000],
+                "reason": f"Missing required field '{k}' in authoritative response",
+            }
+    return derived, None
 
 
 @api_router.post("/assessments", response_model=Assessment)
 async def create_assessment(a: AssessmentIn):
     """Create a new assessment.
 
-    Rule: classification (zone / pattern / action) MUST come from the
-    authoritative upstream. If the upstream is unavailable, we save the
-    raw measurements + documented math (FCP, HRR, RECpct, AURC, τ, FCPv)
-    and mark the record as `calc_source: "pending"`. We NEVER generate a
-    Blue/Green/Yellow/Red result locally.
+    Rules (strict):
+      1. When the authoritative upstream is CONFIGURED (URL + TOKEN both
+         non-empty), the mobile backend performs ONE real request. If it
+         returns 200, the record is saved with ``calc_source: "authoritative"``.
+         **If it returns any non-200 status, we raise HTTP 502 with the
+         exact upstream status + body — no local classification, no
+         pending fallback.** This makes auth misconfigurations impossible
+         to hide behind a silent fallback.
+      2. When the upstream is UNCONFIGURED, the record is saved with raw
+         measurements + documented math and ``calc_source: "pending"``.
+      3. Under NO circumstances do we generate a local Blue/Green/Yellow/Red.
     """
     math = calc_math_only(a.fcr, a.age, a.readings, a.fcpv.model_dump())
-    upstream = await _try_upstream_compute(a)
-    if upstream is not None:
-        # Trust the upstream fully — overwrite math with its authoritative
-        # values (fcp_target, hrr, recpct, aurc, tau, hr_peak, fcpv_total).
-        derived = {**math, **{k: v for k, v in upstream.items() if v is not None}}
-        derived.setdefault("context_flag", upstream.get("context_flag", False))
-        calc_source = "authoritative"
-        calc_notice = None
+    upstream_configured = bool(AUTHORITATIVE_UPSTREAM_URL and AUTHORITATIVE_UPSTREAM_TOKEN)
+    if upstream_configured:
+        derived, error = await _call_upstream(a)
+        if error is not None:
+            # Surface the EXACT authoritative failure — do NOT fall back.
+            # Uses 424 Failed Dependency (semantically correct + not
+            # rewritten by Cloudflare/K8s ingress the way 502 is).
+            raise HTTPException(
+                status_code=424,
+                detail={
+                    "code": "AUTHORITATIVE_UPSTREAM_ERROR",
+                    "message": (
+                        "El servidor autoritativo AFEtm rechazó la solicitud. "
+                        "La evaluación NO se guardó para no ocultar el error."
+                    ),
+                    **error,
+                },
+            )
+        if derived is None:
+            # Network-level failure while configured — treat as pending so the
+            # user does not lose the measurements captured in the field.
+            derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
+            calc_source = "pending"
+            calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo)"
+        else:
+            derived = {**math, **{k: v for k, v in derived.items() if v is not None}}
+            derived.setdefault("context_flag", False)
+            calc_source = "authoritative"
+            calc_notice = None
     else:
-        # PENDING: raw + math only, no zone/pattern/action.
-        derived = {
-            **math,
-            "pattern": None,
-            "zone": None,
-            "action": None,
-            "context_flag": False,
-        }
+        # Upstream not configured → pending (documented behavior).
+        derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
         calc_source = "pending"
         calc_notice = PENDING_NOTICE
     now = datetime.now(timezone.utc).isoformat()
@@ -311,9 +349,19 @@ async def resync_assessment(aid: str):
         readings=doc["readings"],
         fcpv=FCPv(**(doc.get("fcpv") or {})),
     )
-    upstream = await _try_upstream_compute(a)
+    upstream, error = await _call_upstream(a)
+    if error is not None:
+        # Same rule: never hide a real upstream failure behind a pending record.
+        raise HTTPException(
+            status_code=424,
+            detail={
+                "code": "AUTHORITATIVE_UPSTREAM_ERROR",
+                "message": "El servidor autoritativo AFEtm rechazó la re-sincronización.",
+                **error,
+            },
+        )
     if upstream is None:
-        # Still pending — nothing changed
+        # Network-level failure or upstream unconfigured — still pending
         return Assessment(**doc)
     update = {
         "zone": upstream.get("zone"),

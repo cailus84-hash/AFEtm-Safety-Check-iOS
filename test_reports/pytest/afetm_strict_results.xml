@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="10" time="17.814" timestamp="2026-08-22T16:38:24.942641+00:00" hostname="agent-env-fdcea8da-cd46-4a41-9009-1d325a9ce527"><testcase classname="tests.test_afetm_strict_upstream.TestUpstream401Propagation" name="test_root_reports_configured" time="0.182" /><testcase classname="tests.test_afetm_strict_upstream.TestUpstream401Propagation" name="test_post_returns_502_with_upstream_401_body" time="0.373"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_afetm_strict_upstream.py:89: in test_post_returns_502_with_upstream_401_body
+    body = r.json()
+           ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="tests.test_afetm_strict_upstream.TestResync502NoMutation" name="test_resync_returns_502_and_does_not_mutate" time="5.257"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_afetm_strict_upstream.py:133: in test_resync_returns_502_and_does_not_mutate
+    d = r.json().get("detail", {})
+        ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="tests.test_afetm_strict_upstream.TestUnconfiguredFallback" name="test_pending_when_token_empty" time="5.417" /><testcase classname="tests.test_afetm_strict_upstream.TestNetworkFailureFallback" name="test_pending_when_url_unreachable" time="4.458" /><testcase classname="tests.test_afetm_strict_upstream.TestNoLocalClassification" name="test_server_py_has_no_zone_thresholds" time="0.001" /><testcase classname="tests.test_afetm_strict_upstream.TestNoLocalClassification" name="test_frontend_api_ts_types_null_zone" time="0.000" /><testcase classname="tests.test_afetm_strict_upstream.TestNoLocalClassification" name="test_manual_and_guided_handle_upstream_error" time="0.000" /><testcase classname="tests.test_afetm_strict_upstream.TestNoLocalClassification" name="test_detail_screen_surfaces_resync_error" time="0.000" /><testcase classname="tests.test_afetm_strict_upstream.TestNoLocalClassification" name="test_app_json_ble_and_plugins" time="2.010" /></testsuite></testsuites>

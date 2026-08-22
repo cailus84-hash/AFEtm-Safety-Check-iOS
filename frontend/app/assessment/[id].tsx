@@ -17,7 +17,7 @@ import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId, resyncAssessment } from '@/src/lib/api';
+import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId, resyncAssessment, UpstreamError } from '@/src/lib/api';
 import { RecoveryChart } from '@/src/components/RecoveryChart';
 import {
   colors,
@@ -52,6 +52,7 @@ export default function AssessmentDetail() {
   const [targetMet, setTargetMet] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [resyncing, setResyncing] = useState(false);
+  const [resyncErr, setResyncErr] = useState<string | null>(null);
   const shareRef = useRef<any>(null);
 
   useEffect(() => {
@@ -85,9 +86,18 @@ export default function AssessmentDetail() {
   const doResync = async () => {
     if (!id) return;
     setResyncing(true);
+    setResyncErr(null);
     try {
       const updated = await resyncAssessment(id);
       setA(updated);
+    } catch (e: any) {
+      if (e instanceof UpstreamError) {
+        setResyncErr(
+          `HTTP ${e.upstream_status} · ${e.upstream_body?.slice(0, 240) || e.message}`
+        );
+      } else {
+        setResyncErr(e?.message || 'No se pudo reintentar la sincronización.');
+      }
     } finally {
       setResyncing(false);
     }
@@ -281,6 +291,11 @@ export default function AssessmentDetail() {
                   </>
                 )}
               </Pressable>
+              {resyncErr ? (
+                <Text style={styles.resyncErr} testID="detail-resync-error">
+                  Upstream: {resyncErr}
+                </Text>
+              ) : null}
             </View>
           )}
 
@@ -647,6 +662,13 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   resyncBtnText: { color: '#000', fontSize: 14, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  resyncErr: {
+    color: colors.zoneRed,
+    fontSize: 11,
+    marginTop: spacing.sm,
+    lineHeight: 15,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   deleteBox: {
     marginTop: spacing.xl,
     padding: spacing.md,

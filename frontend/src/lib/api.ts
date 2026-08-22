@@ -63,14 +63,59 @@ export type Assessment = {
   calc_notice?: string | null;
 };
 
+export class UpstreamError extends Error {
+  status: number;
+  upstream_status?: number;
+  upstream_body?: string;
+  upstream_url?: string;
+  code?: string;
+  constructor(status: number, detail: any) {
+    const msg =
+      (detail && (detail.message || detail.detail)) ||
+      (typeof detail === 'string' ? detail : `HTTP ${status}`);
+    super(msg);
+    this.name = 'UpstreamError';
+    this.status = status;
+    if (detail && typeof detail === 'object') {
+      this.code = detail.code;
+      this.upstream_status = detail.upstream_status;
+      this.upstream_body = detail.upstream_body;
+      this.upstream_url = detail.upstream_url;
+    }
+  }
+}
+
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     ...opts,
   });
   if (!res.ok) {
+    let detail: any = null;
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    try {
+      const parsed = JSON.parse(text);
+      // FastAPI wraps HTTPException detail under "detail"
+      detail = parsed?.detail ?? parsed;
+    } catch {
+      detail = text;
+    }
+    // Detect authoritative upstream errors robustly. Prefer matching by the
+    // structured "code" field so any status (424, 502, etc.) that carries
+    // the AUTHORITATIVE_UPSTREAM_ERROR envelope is surfaced correctly.
+    if (
+      detail &&
+      typeof detail === 'object' &&
+      (detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR' ||
+        (typeof detail.upstream_status === 'number' && typeof detail.upstream_body !== 'undefined'))
+    ) {
+      throw new UpstreamError(res.status, detail);
+    }
+    throw new Error(
+      (detail && (detail.message || detail.detail)) ||
+        text ||
+        `HTTP ${res.status}`
+    );
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
