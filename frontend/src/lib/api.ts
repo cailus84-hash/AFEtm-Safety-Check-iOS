@@ -52,14 +52,14 @@ export type Assessment = {
   recpct: number;
   aurc: number;
   tau: number;
-  pattern: 'RAPID' | 'NORMAL' | 'DELAYED' | 'FLATTENED' | 'UNSTABLE';
-  zone: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED';
-  action: string;
+  pattern: 'RAPID' | 'NORMAL' | 'DELAYED' | 'FLATTENED' | 'UNSTABLE' | null;
+  zone: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED' | null;
+  action: string | null;
   fcpv: FCPv;
   fcpv_total: number;
   context_flag: boolean;
   created_at: string;
-  calc_source?: 'authoritative' | 'reference-mirror';
+  calc_source?: 'authoritative' | 'pending';
   calc_notice?: string | null;
 };
 
@@ -104,4 +104,8 @@ export async function getAssessment(id: string) {
 
 export async function deleteAssessment(id: string) {
   return req<{ deleted: boolean }>(`/assessments/${id}`, { method: 'DELETE' });
+}
+
+export async function resyncAssessment(id: string) {
+  return req<Assessment>(`/assessments/${id}/resync`, { method: 'POST' });
 }

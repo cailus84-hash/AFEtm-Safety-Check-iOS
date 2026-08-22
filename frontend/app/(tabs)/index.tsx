@@ -76,11 +76,13 @@ export default function Home() {
   const fcpTarget = profile ? Math.round(0.8 * (220 - profile.age)) : 0;
   const last = assessments[0] ?? null;
   const count = assessments.length;
-  // Last 7 assessments as chronological trend (oldest → newest)
+  // Last 7 assessments as chronological trend (oldest → newest).
+  // Only include AUTHORITATIVE results — trend must not display invented zones.
   const trendData = [...assessments]
+    .filter((a) => a.zone !== null && a.zone !== undefined)
     .slice(0, 7)
     .reverse()
-    .map((a) => ({ recpct: a.recpct, zone: a.zone }));
+    .map((a) => ({ recpct: a.recpct, zone: a.zone as 'BLUE' | 'GREEN' | 'YELLOW' | 'RED' }));
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="home-screen">
@@ -117,28 +119,58 @@ export default function Home() {
           <>
             {/* Last check hero */}
             {last ? (
-              <Pressable
-                testID="home-last-card"
-                onPress={() => router.push(`/assessment/${last.id}`)}
-                style={[
-                  styles.heroCard,
-                  {
-                    borderColor: zoneColor(last.zone),
-                    shadowColor: zoneColor(last.zone),
-                  },
-                ]}
-              >
-                <Text style={styles.heroLabel}>Última evaluación</Text>
-                <Text style={[styles.zoneName, { color: zoneColor(last.zone) }]}>
-                  {zoneLabel(last.zone)}
-                </Text>
-                <Text style={styles.heroDesc}>{zoneDescription(last.zone)}</Text>
+              last.zone ? (
+                <Pressable
+                  testID="home-last-card"
+                  onPress={() => router.push(`/assessment/${last.id}`)}
+                  style={[
+                    styles.heroCard,
+                    {
+                      borderColor: zoneColor(last.zone),
+                      shadowColor: zoneColor(last.zone),
+                    },
+                  ]}
+                >
+                  <Text style={styles.heroLabel}>Última evaluación</Text>
+                  <Text style={[styles.zoneName, { color: zoneColor(last.zone) }]}>
+                    {zoneLabel(last.zone)}
+                  </Text>
+                  <Text style={styles.heroDesc}>{zoneDescription(last.zone)}</Text>
 
-                <View style={styles.heroMetaRow}>
-                  <MetaChip icon="clock-outline" label={formatDate(last.created_at)} />
-                  <MetaChip icon="pulse" label={`Patrón ${patternLabel(last.pattern)}`} />
-                </View>
-              </Pressable>
+                  <View style={styles.heroMetaRow}>
+                    <MetaChip icon="clock-outline" label={formatDate(last.created_at)} />
+                    {last.pattern ? (
+                      <MetaChip icon="pulse" label={`Patrón ${patternLabel(last.pattern)}`} />
+                    ) : null}
+                  </View>
+                </Pressable>
+              ) : (
+                <Pressable
+                  testID="home-last-pending-card"
+                  onPress={() => router.push(`/assessment/${last.id}`)}
+                  style={[
+                    styles.heroCard,
+                    {
+                      borderColor: colors.brandGold,
+                      shadowColor: colors.brandGold,
+                      borderStyle: 'dashed',
+                    },
+                  ]}
+                >
+                  <Text style={styles.heroLabel}>Última evaluación</Text>
+                  <Text style={[styles.zoneName, { color: colors.brandGold }]}>
+                    Pendiente
+                  </Text>
+                  <Text style={styles.heroDesc}>
+                    Resultado pendiente de sincronización con el motor oficial
+                    AFEtm. Toca para reintentar.
+                  </Text>
+                  <View style={styles.heroMetaRow}>
+                    <MetaChip icon="clock-outline" label={formatDate(last.created_at)} />
+                    <MetaChip icon="cloud-sync-outline" label="Sin clasificar" />
+                  </View>
+                </Pressable>
+              )
             ) : (
               <View style={[styles.heroCard, { borderColor: colors.border }]} testID="home-empty-card">
                 <MaterialCommunityIcons

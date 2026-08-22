@@ -17,7 +17,7 @@ import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId } from '@/src/lib/api';
+import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId, resyncAssessment } from '@/src/lib/api';
 import { RecoveryChart } from '@/src/components/RecoveryChart';
 import {
   colors,
@@ -51,6 +51,7 @@ export default function AssessmentDetail() {
   const [shareErr, setShareErr] = useState<string | null>(null);
   const [targetMet, setTargetMet] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const shareRef = useRef<any>(null);
 
   useEffect(() => {
@@ -60,11 +61,11 @@ export default function AssessmentDetail() {
         const assessment = await getAssessment(id);
         setA(assessment);
 
-        // Zone objetivo — celebrar la primera vez que se abre este resultado
+        // Zona objetivo — only meaningful when authoritative classification exists.
+        if (!assessment.zone) return;
         const deviceId = await getDeviceId();
         const profile = await fetchProfile(deviceId).catch(() => null);
         const target = profile?.target_zone ?? null;
-        // BLUE > GREEN > YELLOW > RED (higher is better)
         const rank: Record<string, number> = { RED: 0, YELLOW: 1, GREEN: 2, BLUE: 3 };
         if (target && rank[assessment.zone] >= rank[target]) {
           setTargetMet(true);
@@ -80,6 +81,17 @@ export default function AssessmentDetail() {
       }
     })();
   }, [id]);
+
+  const doResync = async () => {
+    if (!id) return;
+    setResyncing(true);
+    try {
+      const updated = await resyncAssessment(id);
+      setA(updated);
+    } finally {
+      setResyncing(false);
+    }
+  };
 
   const remove = async () => {
     if (!id) return;
@@ -146,11 +158,12 @@ export default function AssessmentDetail() {
     );
   }
 
-  const color = zoneColor(a.zone);
+  const pending = !a.zone || a.calc_source !== 'authoritative';
+  const color = pending ? colors.brandGold : zoneColor(a.zone!);
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="assessment-detail-screen">
-      {showConfetti && (
+      {showConfetti && !pending && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="confetti-overlay">
           <ConfettiCannon
             count={140}
@@ -199,58 +212,81 @@ export default function AssessmentDetail() {
           style={styles.shareRegion}
           testID="detail-share-region"
         >
-          {/* Zone banner */}
-          <View
-            style={[
-              styles.banner,
-              { borderColor: color, shadowColor: color },
-            ]}
-            testID="result-zone-banner"
-          >
-            <LinearGradient
-              colors={[`${color}30`, 'transparent']}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={[styles.bannerIcon, { borderColor: color, shadowColor: color }]}>
-              <MaterialCommunityIcons
-                name={
-                  a.zone === 'BLUE' ? 'shield-check'
-                  : a.zone === 'GREEN' ? 'chart-line-variant'
-                  : a.zone === 'YELLOW' ? 'alert'
-                  : 'alert-octagon'
-                }
-                size={28}
-                color={color}
+          {/* Zone banner (only when authoritative classification exists) */}
+          {!pending ? (
+            <View
+              style={[styles.banner, { borderColor: color, shadowColor: color }]}
+              testID="result-zone-banner"
+            >
+              <LinearGradient
+                colors={[`${color}30`, 'transparent']}
+                style={StyleSheet.absoluteFill}
               />
-            </View>
-            <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
-            <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone)}</Text>
-            <Text style={styles.bannerDesc}>{zoneDescription(a.zone)}</Text>
-            <View style={styles.bannerRow}>
-              <View style={styles.bannerChip}>
-                <Text style={styles.bannerChipLabel}>PATRÓN</Text>
-                <Text style={styles.bannerChipValue}>{patternLabel(a.pattern)}</Text>
+              <View style={[styles.bannerIcon, { borderColor: color, shadowColor: color }]}>
+                <MaterialCommunityIcons
+                  name={
+                    a.zone === 'BLUE' ? 'shield-check'
+                    : a.zone === 'GREEN' ? 'chart-line-variant'
+                    : a.zone === 'YELLOW' ? 'alert'
+                    : 'alert-octagon'
+                  }
+                  size={28}
+                  color={color}
+                />
               </View>
-              <View style={styles.bannerChip}>
-                <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
-                <Text style={styles.bannerChipValue}>{a.action}</Text>
+              <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
+              <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone!)}</Text>
+              <Text style={styles.bannerDesc}>{zoneDescription(a.zone!)}</Text>
+              <View style={styles.bannerRow}>
+                <View style={styles.bannerChip}>
+                  <Text style={styles.bannerChipLabel}>PATRÓN</Text>
+                  <Text style={styles.bannerChipValue}>
+                    {a.pattern ? patternLabel(a.pattern) : '—'}
+                  </Text>
+                </View>
+                <View style={styles.bannerChip}>
+                  <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
+                  <Text style={styles.bannerChipValue}>{a.action ?? '—'}</Text>
+                </View>
               </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.pendingBanner} testID="result-pending-banner">
+              <View style={styles.pendingIconWrap}>
+                <MaterialCommunityIcons name="cloud-sync-outline" size={28} color={colors.brandGold} />
+              </View>
+              <Text style={styles.pendingEyebrow}>ESTADO</Text>
+              <Text style={styles.pendingTitle}>Pendiente de sincronización</Text>
+              <Text style={styles.pendingDesc}>
+                {a.calc_notice ||
+                  'Resultado pendiente de sincronización con el motor oficial AFEtm.'}
+              </Text>
+              <Text style={styles.pendingHint}>
+                Las mediciones fueron guardadas correctamente. La zona (Azul /
+                Verde / Amarillo / Rojo) sólo se muestra cuando el servidor
+                autoritativo la clasifica.
+              </Text>
+              <Pressable
+                testID="detail-resync-btn"
+                onPress={doResync}
+                disabled={resyncing}
+                style={[styles.resyncBtn, resyncing && { opacity: 0.6 }]}
+              >
+                {resyncing ? (
+                  <ActivityIndicator color="#000" size="small" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="refresh" size={16} color="#000" />
+                    <Text style={styles.resyncBtnText}>Reintentar sincronización</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
 
           <Text style={styles.date}>{fmt(a.created_at)}</Text>
 
-          {a.calc_source && a.calc_source !== 'authoritative' ? (
-            <View style={styles.calcSourceBanner} testID="calc-source-banner">
-              <MaterialCommunityIcons name="alert-outline" size={16} color={colors.zoneYellow} />
-              <Text style={styles.calcSourceText}>
-                {a.calc_notice ||
-                  'Cálculo local (referencia). Los umbrales de zona no son autoritativos.'}
-              </Text>
-            </View>
-          ) : null}
-
-          {targetMet && (
+          {targetMet && !pending && (
             <View style={styles.celebrateBanner} testID="celebrate-banner">
               <MaterialCommunityIcons name="trophy" size={20} color={colors.brandGold} />
               <Text style={styles.celebrateText}>
@@ -578,6 +614,39 @@ const styles = StyleSheet.create({
   calcSourceText: {
     color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 15, flex: 1,
   },
+  pendingBanner: {
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.brandGold,
+    borderStyle: 'dashed',
+    backgroundColor: colors.surfaceSecondary,
+    padding: spacing.xl,
+    shadowColor: colors.brandGold,
+    shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+    alignItems: 'flex-start',
+  },
+  pendingIconWrap: {
+    width: 52, height: 52, borderRadius: 26,
+    borderWidth: 2, borderColor: colors.brandGold,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.md,
+    shadowColor: colors.brandGold, shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4,
+  },
+  pendingEyebrow: { color: colors.onSurfaceTertiary, fontSize: 11, letterSpacing: 3, fontWeight: '700' },
+  pendingTitle: { color: colors.brandGold, fontSize: 22, fontWeight: '900', letterSpacing: 0.3, marginTop: 4 },
+  pendingDesc: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  pendingHint: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 16, marginTop: spacing.md },
+  resyncBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+    backgroundColor: colors.brandGold,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
+  },
+  resyncBtnText: { color: '#000', fontSize: 14, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
   deleteBox: {
     marginTop: spacing.xl,
     padding: spacing.md,

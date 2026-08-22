@@ -176,7 +176,9 @@ export default function History() {
             <View style={{ gap: spacing.md }}>
               {filtered.map((a) => {
                 const { date, time } = fmt(a.created_at);
-                const color = zoneColor(a.zone);
+                const isPending = !a.zone;
+                const color = isPending ? colors.brandGold : zoneColor(a.zone!);
+                const label = isPending ? 'Pendiente' : zoneLabel(a.zone!);
                 const isSelected = selected.includes(a.id);
                 return (
                   <Pressable
@@ -197,7 +199,7 @@ export default function History() {
                     <View style={[styles.leftStripe, { backgroundColor: color }]} />
                     <View style={{ flex: 1, padding: spacing.md }}>
                       <View style={styles.rowTop}>
-                        <Text style={[styles.zoneName, { color }]}>{zoneLabel(a.zone)}</Text>
+                        <Text style={[styles.zoneName, { color }]}>{label}</Text>
                         {compareMode ? (
                           <View
                             style={[
@@ -216,7 +218,11 @@ export default function History() {
                       </View>
                       <View style={styles.metaWrap}>
                         <Meta icon="clock-outline" text={`${date} · ${time}`} />
-                        <Meta icon="pulse" text={`Patrón ${patternLabel(a.pattern)}`} />
+                        {a.pattern ? (
+                          <Meta icon="pulse" text={`Patrón ${patternLabel(a.pattern)}`} />
+                        ) : (
+                          <Meta icon="cloud-sync-outline" text="Sin clasificar" />
+                        )}
                         <Meta icon="heart" text={`Rec ${a.recpct}%`} />
                       </View>
                     </View>

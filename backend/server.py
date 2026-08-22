@@ -21,10 +21,10 @@ db = client[os.environ['DB_NAME']]
 # --- AFEtm authoritative upstream configuration ---
 # The AFEtm technical spec (v3.1) mandates that "el servidor conserva los
 # motores de cálculo como única fuente oficial". If UPSTREAM is configured,
-# every classification decision is delegated to that server. Otherwise, we
-# use a REFERENCE MIRROR that faithfully implements the documented formulas
-# BUT whose classification thresholds are heuristic — clearly labelled as
-# such via `_calc_source: "reference-mirror"` and a UI banner.
+# every classification decision is delegated to that server. Otherwise the
+# assessment is stored with `calc_source: "pending"` and the client shows
+# "Resultado pendiente de sincronización con el motor oficial AFEtm." — we
+# never generate a local Blue/Green/Yellow/Red zone.
 AUTHORITATIVE_UPSTREAM_URL = (os.environ.get('AUTHORITATIVE_UPSTREAM_URL') or '').rstrip('/')
 AUTHORITATIVE_UPSTREAM_TOKEN = os.environ.get('AUTHORITATIVE_UPSTREAM_TOKEN') or ''
 
@@ -80,38 +80,40 @@ class Assessment(BaseModel):
     recpct: float
     aurc: float
     tau: float
-    pattern: str
-    zone: str
-    action: str
+    pattern: Optional[str] = None      # None while pending upstream sync
+    zone: Optional[str] = None         # None while pending upstream sync
+    action: Optional[str] = None       # None while pending upstream sync
     fcpv: Dict[str, int]
     fcpv_total: int
-    context_flag: bool
+    context_flag: bool = False         # Only meaningful when authoritative
     created_at: str
-    calc_source: str = "reference-mirror"  # "authoritative" | "reference-mirror"
-    calc_notice: Optional[str] = None      # explanation shown to the user
+    calc_source: str = "pending"       # "authoritative" | "pending"
+    calc_notice: Optional[str] = None  # explanation shown to the user
 
 
-# ---------- Calculation engine (REFERENCE MIRROR — see doc §14) ----------
-# WARNING: This block implements the documented FORMULAS (FCP, HRR, RECpct,
-# AURC, tau) faithfully but the zone THRESHOLDS and PATTERN heuristics below
-# are NOT specified by the technical document verbatim — the document defers
-# them to `afeRecoveryEngine.ts` (v2) which lives on the authoritative
-# Express server. Whenever `AUTHORITATIVE_UPSTREAM_URL` + a valid token are
-# provided, this block MUST be bypassed by the proxy path.
+# ---------- Documented math only (NO classification) ----------
+# Per user directive & AFEtm v3.1 §14, the mobile backend must NOT keep an
+# independent production classification scale. We compute ONLY the documented
+# mathematical quantities (FCP, HRR, RECpct, AURC, τ, FCPv total). Zone,
+# pattern and action are ALWAYS supplied by the authoritative upstream
+# server. When the upstream is unavailable we save the raw measurements and
+# return a "pending" result — never a locally-invented Blue/Green/Yellow/Red.
 TIMES = [0, 60, 90, 120, 150, 180]
 
-REFERENCE_NOTICE = (
-    "Motor de cálculo local (REFERENCE MIRROR). Umbrales de zona y patrón "
-    "no autoritativos. Configura AUTHORITATIVE_UPSTREAM_URL + TOKEN para "
-    "delegar al servidor oficial (afeRecoveryEngine.ts)."
-)
+PENDING_NOTICE = "Resultado pendiente de sincronización con el motor oficial AFEtm."
 
 
 def calc_fcp(age: int) -> int:
     return round(0.80 * (220 - age))
 
 
-def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str, int]) -> dict:
+def calc_math_only(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str, int]) -> dict:
+    """Compute ONLY documented mathematical quantities. No classification.
+
+    All classification (zone, pattern, action) MUST come from the
+    authoritative upstream. This function is safe to run locally because
+    every quantity here is defined verbatim in the technical document.
+    """
     for t in TIMES:
         if str(t) not in readings:
             raise HTTPException(400, f"Falta lectura en t={t}s")
@@ -132,7 +134,8 @@ def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str
         aurc += (hrs[i] + hrs[i + 1]) / 2.0 * dt
     aurc = round(aurc, 1)
 
-    # tau: time to decay to 63.2% of (peak - fcr)
+    # tau: first time the HR decays to (peak − 63.2% of peak−fcr) — standard
+    # biophysical definition present in doc Tabla 2. 180.0 if never reached.
     target_hr = hr_peak - 0.632 * (hr_peak - fcr)
     tau = 180.0
     for t, hr in zip(TIMES, hrs):
@@ -140,42 +143,7 @@ def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str
             tau = float(t)
             break
 
-    # Pattern
-    diffs = [hrs[i + 1] - hrs[i] for i in range(len(hrs) - 1)]
-    oscillating = any(d > 4 for d in diffs)  # rise during recovery = noise/oscillation
-    tail_delta = hrs[-3] - hrs[-1]
-    plateau = tail_delta < 3 and recpct < 35
-
-    if oscillating:
-        pattern = "UNSTABLE"
-    elif plateau:
-        pattern = "FLATTENED"
-    elif recpct >= 60:
-        pattern = "RAPID"
-    elif recpct >= 40:
-        pattern = "NORMAL"
-    else:
-        pattern = "DELAYED"
-
-    # Zone (AFE v2 simplified)
-    if pattern in ("UNSTABLE", "FLATTENED") or recpct < 25:
-        zone = "RED"
-    elif recpct >= 65 and pattern == "RAPID":
-        zone = "BLUE"
-    elif recpct >= 40:
-        zone = "GREEN"
-    else:
-        zone = "YELLOW"
-
     fcpv_total = int(sum(fcpv.values()))
-    context_flag = fcpv_total >= 6  # bump caution flag only
-
-    actions = {
-        "BLUE": "Continuar con normalidad",
-        "GREEN": "Continuar y mantener seguimiento",
-        "YELLOW": "Observar y ajustar la carga",
-        "RED": "Reevaluar antes de esfuerzos exigentes",
-    }
 
     return {
         "fcp_target": fcp_target,
@@ -184,11 +152,7 @@ def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str
         "recpct": recpct,
         "aurc": aurc,
         "tau": tau,
-        "pattern": pattern,
-        "zone": zone,
-        "action": actions[zone],
         "fcpv_total": fcpv_total,
-        "context_flag": context_flag,
     }
 
 
@@ -200,8 +164,8 @@ async def root():
         "service": "AFEtm Safety Check",
         "status": "ok",
         "upstream_configured": upstream_configured,
-        "calc_source_default": "authoritative" if upstream_configured else "reference-mirror",
-        "reference_notice": REFERENCE_NOTICE if not upstream_configured else None,
+        "calc_source_default": "authoritative" if upstream_configured else "pending",
+        "pending_notice": PENDING_NOTICE if not upstream_configured else None,
     }
 
 
@@ -279,15 +243,34 @@ async def _try_upstream_compute(a: "AssessmentIn") -> Optional[dict]:
 
 @api_router.post("/assessments", response_model=Assessment)
 async def create_assessment(a: AssessmentIn):
+    """Create a new assessment.
+
+    Rule: classification (zone / pattern / action) MUST come from the
+    authoritative upstream. If the upstream is unavailable, we save the
+    raw measurements + documented math (FCP, HRR, RECpct, AURC, τ, FCPv)
+    and mark the record as `calc_source: "pending"`. We NEVER generate a
+    Blue/Green/Yellow/Red result locally.
+    """
+    math = calc_math_only(a.fcr, a.age, a.readings, a.fcpv.model_dump())
     upstream = await _try_upstream_compute(a)
     if upstream is not None:
-        derived = upstream
+        # Trust the upstream fully — overwrite math with its authoritative
+        # values (fcp_target, hrr, recpct, aurc, tau, hr_peak, fcpv_total).
+        derived = {**math, **{k: v for k, v in upstream.items() if v is not None}}
+        derived.setdefault("context_flag", upstream.get("context_flag", False))
         calc_source = "authoritative"
         calc_notice = None
     else:
-        derived = calc_assessment(a.fcr, a.age, a.readings, a.fcpv.model_dump())
-        calc_source = "reference-mirror"
-        calc_notice = REFERENCE_NOTICE
+        # PENDING: raw + math only, no zone/pattern/action.
+        derived = {
+            **math,
+            "pattern": None,
+            "zone": None,
+            "action": None,
+            "context_flag": False,
+        }
+        calc_source = "pending"
+        calc_notice = PENDING_NOTICE
     now = datetime.now(timezone.utc).isoformat()
     aid = str(uuid.uuid4())
     doc = {
@@ -304,6 +287,49 @@ async def create_assessment(a: AssessmentIn):
     }
     await db.assessments.insert_one(doc.copy())
     doc.pop("_id", None)
+    return Assessment(**doc)
+
+
+@api_router.post("/assessments/{aid}/resync", response_model=Assessment)
+async def resync_assessment(aid: str):
+    """Retry authoritative classification for a pending assessment.
+
+    Useful when the assessment was captured while the upstream was
+    unavailable. This does NOT invent a zone; it only replaces the
+    pending status if the upstream now returns a valid result.
+    """
+    doc = await db.assessments.find_one({"id": aid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Evaluación no encontrada")
+    if doc.get("calc_source") == "authoritative":
+        return Assessment(**doc)
+    # Rebuild the input from the stored raw data.
+    a = AssessmentIn(
+        device_id=doc["device_id"],
+        fcr=doc["fcr"],
+        age=doc["age"],
+        readings=doc["readings"],
+        fcpv=FCPv(**(doc.get("fcpv") or {})),
+    )
+    upstream = await _try_upstream_compute(a)
+    if upstream is None:
+        # Still pending — nothing changed
+        return Assessment(**doc)
+    update = {
+        "zone": upstream.get("zone"),
+        "pattern": upstream.get("pattern"),
+        "action": upstream.get("action") or doc.get("action"),
+        "hrr": upstream.get("hrr", doc["hrr"]),
+        "recpct": upstream.get("recpct", doc["recpct"]),
+        "fcp_target": upstream.get("fcp_target", doc["fcp_target"]),
+        "aurc": upstream.get("aurc", doc["aurc"]),
+        "tau": upstream.get("tau", doc["tau"]),
+        "context_flag": upstream.get("context_flag", False),
+        "calc_source": "authoritative",
+        "calc_notice": None,
+    }
+    await db.assessments.update_one({"id": aid}, {"$set": update})
+    doc.update(update)
     return Assessment(**doc)
 
 

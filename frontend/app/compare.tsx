@@ -83,8 +83,10 @@ export default function Compare() {
     );
   }
 
-  const ca = zoneColor(a.zone);
-  const cb = zoneColor(b.zone);
+  const ca = a.zone ? zoneColor(a.zone) : colors.brandGold;
+  const cb = b.zone ? zoneColor(b.zone) : colors.brandGold;
+  const labelA = a.zone ? zoneLabel(a.zone).split(' · ')[0] : 'Pendiente';
+  const labelB = b.zone ? zoneLabel(b.zone).split(' · ')[0] : 'Pendiente';
   const dRec = +(b.recpct - a.recpct).toFixed(1);
   const dHrr = b.hrr - a.hrr;
   const dTau = +(b.tau - a.tau).toFixed(0);
@@ -107,8 +109,8 @@ export default function Compare() {
 
         <View style={{ alignItems: 'center', marginTop: spacing.lg }}>
           <CompareChart
-            a={{ label: `A · ${zoneLabel(a.zone).split(' · ')[0]}`, color: ca, readings: a.readings }}
-            b={{ label: `B · ${zoneLabel(b.zone).split(' · ')[0]}`, color: cb, readings: b.readings }}
+            a={{ label: `A · ${labelA}`, color: ca, readings: a.readings }}
+            b={{ label: `B · ${labelB}`, color: cb, readings: b.readings }}
             times={[0, 60, 90, 120, 150, 180]}
             width={chartW}
             height={240}
@@ -117,8 +119,8 @@ export default function Compare() {
 
         {/* Session cards */}
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <SessionCard label="A · Anterior" a={a} c={ca} solid />
-          <SessionCard label="B · Reciente" a={b} c={cb} />
+          <SessionCard label="A · Anterior" a={a} c={ca} zoneLabel={labelA} solid />
+          <SessionCard label="B · Reciente" a={b} c={cb} zoneLabel={labelB} />
         </View>
 
         {/* Deltas */}
@@ -137,7 +139,7 @@ export default function Compare() {
   );
 }
 
-function SessionCard({ label, a, c, solid }: { label: string; a: Assessment; c: string; solid?: boolean }) {
+function SessionCard({ label, a, c, zoneLabel, solid }: { label: string; a: Assessment; c: string; zoneLabel: string; solid?: boolean }) {
   return (
     <View style={[styles.card, { borderColor: c }]}>
       <View style={styles.cardTop}>
@@ -152,14 +154,14 @@ function SessionCard({ label, a, c, solid }: { label: string; a: Assessment; c: 
           />
           <Text style={styles.cardLabel}>{label}</Text>
         </View>
-        <Text style={[styles.cardZone, { color: c }]}>{zoneLabel(a.zone).split(' · ')[0]}</Text>
+        <Text style={[styles.cardZone, { color: c }]}>{zoneLabel}</Text>
       </View>
       <Text style={styles.cardDate}>{fmt(a.created_at)}</Text>
       <View style={styles.cardMetaRow}>
         <MetaMini label="RECpct" value={`${a.recpct}%`} />
         <MetaMini label="HRR" value={`${a.hrr}bpm`} />
         <MetaMini label="τ" value={`${a.tau}s`} />
-        <MetaMini label="Patrón" value={patternLabel(a.pattern)} />
+        <MetaMini label="Patrón" value={a.pattern ? patternLabel(a.pattern) : '—'} />
       </View>
     </View>
   );

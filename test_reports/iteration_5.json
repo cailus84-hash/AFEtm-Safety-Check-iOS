@@ -1,0 +1,36 @@
+{
+  "summary": "STRICT PENDING-MODE BUG FIX VERIFIED end-to-end. Backend no longer generates ANY local zone/pattern/action when the authoritative upstream is unavailable. New test file /app/backend/tests/test_afetm_pending.py: 9/9 PASSED. Verified: (1) GET /api/ returns upstream_configured=false, calc_source_default='pending', pending_notice='Resultado pendiente de sincronización con el motor oficial AFEtm.'; (2) POST /api/assessments with empty AUTHORITATIVE_UPSTREAM_TOKEN returns calc_source='pending', zone/pattern/action all null, context_flag=false, calc_notice exact Spanish string; raw preserved (fcr=60, age=30, readings), documented math computed exactly (fcp_target=152, hr_peak=180, hrr=15, recpct=50.0, aurc>0, tau numeric, fcpv_total=0); no _id leak; (3) GET /api/assessments/{id} on pending returns null zone/pattern/action without crashing; (4) POST /api/assessments/{aid}/resync on pending → returns record unchanged (still pending) because upstream token empty; on missing ID → 404; on already-authoritative record → no-op (returns as-is, does not overwrite); (5) Static audit confirms /app/backend/server.py has ZERO occurrences of 'recpct >= 65', 'recpct >= 40', 'recpct < 25', 'def calc_assessment', '\"oscillating\"', '\"plateau\"'; calc_math_only present and Spanish pending notice present; (6) Regression: /api/profile POST+GET still works; DELETE /api/assessments/{aid} still works (returns 200 + subsequent GET 404). Frontend UI live-tested on mobile viewport (390x844) end-to-end: seeded profile + assessment via API, navigated to /assessment/{id} → confirmed testID='result-pending-banner' visible with 'Pendiente de sincronización' Spanish text and 'REINTENTAR SINCRONIZACIÓN' button (testID='detail-resync-btn'); testID='result-zone-banner' NOT rendered; testID='confetti-overlay' NOT rendered; testID='result-recovery-chart' still renders with math. Clicked resync → stayed pending as expected. Home screen shows testID='home-last-pending-card' with gold dashed border, 'Pendiente' label, 'Sin clasificar' chip. History screen shows the row with gold left stripe, 'Pendiente' label, 'Sin clasificar' meta chip, RECpct 50% chip; zone filter chips (Todas/Azul/Verde/Amarillo/Rojo) still render. api.ts Assessment.zone/pattern/action are '| null', calc_source is 'authoritative'|'pending', resyncAssessment() helper exists. No react-native issues (no expo-av / expo-barcode-scanner / expo-background-fetch usage). Only benign 'shadow* style props are deprecated' web-only warnings from React Native Web (not app bugs). NO issues found.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_afetm_pending.py",
+    "/app/test_reports/pytest/afetm_pending_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL cleanup only: server.py line 27 still has a stale comment referencing 'reference-mirror' from the previous iteration — no functional impact (it's inside a docstring), but consider updating for clarity."
+  ],
+  "critical_code_review_comments": [
+    "server.py:110-156 calc_math_only computes ONLY documented mathematical quantities (fcp_target, hr_peak, hrr, recpct, aurc, tau, fcpv_total) — no zone/pattern/action derivation anywhere; verified by regex audit for old thresholds.",
+    "server.py:244-290 create_assessment: when _try_upstream_compute returns None, sets zone=None, pattern=None, action=None, context_flag=False, calc_source='pending', calc_notice=PENDING_NOTICE — matches spec exactly.",
+    "server.py:293-333 resync_assessment: correctly returns 404 for missing IDs, returns record unchanged when already-authoritative (no-op), and does NOT invent a zone when upstream still fails — only updates DB when upstream returns a valid derived dict.",
+    "server.py:71-91 Assessment model has Optional[str] for pattern/zone/action — Pydantic-safe for null values in DB.",
+    "server.py:160-169 GET /api/ correctly gates upstream_configured on both URL AND TOKEN, exposes calc_source_default='pending' and pending_notice only when unconfigured.",
+    "assessment/[id].tsx:161 pending = !a.zone || calc_source !== 'authoritative' — belt-and-suspenders; assessment/[id].tsx:166 confetti gated on !pending; assessment/[id].tsx:216 zone banner gated on !pending; assessment/[id].tsx:254-284 pending banner + resync CTA renders with exact Spanish notice fallback.",
+    "(tabs)/index.tsx:81-85 trendData filters out assessments where zone is null/undefined before feeding the sparkline — pending records do NOT contaminate the trend.",
+    "(tabs)/history.tsx:179-181 pending rows render with gold color, 'Pendiente' label; line 224 'Sin clasificar' Meta chip when pattern is null.",
+    "compare.tsx:86-89 handles pending zone safely with brandGold + 'Pendiente' label; overlay curves + metric deltas render without null-dereferencing (a.recpct/hrr/tau always present because they are documented math).",
+    "api.ts:55-57 Assessment.pattern/zone/action correctly typed as '| null'; calc_source narrowed to 'authoritative' | 'pending'; resyncAssessment(id) helper present at line 109-111."
+  ],
+  "updated_files": ["/app/backend/tests/test_afetm_pending.py (new)"],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% (all pending-mode testIDs verified live: result-pending-banner, detail-resync-btn, home-last-pending-card, history row Pendiente/Sin clasificar; forbidden testIDs absent: result-zone-banner, confetti-overlay)" },
+  "seed_data_creation": "One profile + one assessment seeded via API with device_id='ui-test-pending-01' for UI verification; assessment was cleaned up post-test (DELETE → 200). Pytest test data uses TEST_pending_/TEST_authseed_/TEST_del_/TEST_profile_ prefixes and is deleted by fixture teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_afetm_pending.py (9 tests, 1.7s). AUTHORITATIVE_UPSTREAM_TOKEN in /app/backend/.env is intentionally empty — DO NOT set it. The test_resync_noop_on_authoritative test uses direct MongoDB access via MONGO_URL/DB_NAME env vars to seed a fake authoritative record. Frontend testIDs to verify pending state: 'result-pending-banner', 'detail-resync-btn', 'home-last-pending-card', 'history-item-<id>'. To seed a pending assessment from the UI, POST to /api/profile then /api/assessments and set localStorage['afetm.device_id']=<device_id> before loading. All 9 backend tests are deterministic and idempotent.",
+  "rca_of_issue": "Bug fix VERIFIED. Previous iteration used a 'REFERENCE MIRROR' that still generated Blue/Green/Yellow/Red locally when the upstream was unavailable — violating the AFEtm spec §14 rule that classification MUST come only from the authoritative engine. Current implementation removes calc_assessment entirely, replaces it with calc_math_only (documented math only), and marks any assessment created without upstream connectivity as calc_source='pending' with a null zone/pattern/action and a Spanish user-facing notice. All frontend surfaces (detail, home, history, compare) handle the null-zone case with distinct 'Pendiente' UI. No regressions in profile/delete/list endpoints."
+}

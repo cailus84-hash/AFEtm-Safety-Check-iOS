@@ -6,7 +6,15 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
-## Scope (v5 — freeze; audit + build readiness added)
+## Scope (v6 — strict authoritative-only classification)
+- **REMOVED all locally invented thresholds** (Blue≥65 / Green≥40 / Yellow≥25 / Red<25). The backend no longer contains any classification decision code.
+- `POST /api/assessments` behaviour:
+  - **Upstream configured + reachable**: delegates fully to the authoritative Express server; `calc_source: "authoritative"` with zone/pattern/action from upstream.
+  - **Upstream unavailable**: saves raw + documented math (FCP, HRR, RECpct, AURC, τ, FCPv total) with `zone=null, pattern=null, action=null` and `calc_source: "pending"` + notice `"Resultado pendiente de sincronización con el motor oficial AFEtm."`
+- New endpoint `POST /api/assessments/{id}/resync` — retries authoritative classification for a pending record (does not invent a zone).
+- UI: pending assessments show a distinct gold dashed banner with "REINTENTAR SINCRONIZACIÓN" button. Chart + math still visible. Home hero, history rows, trend sparkline all respect the pending state (no colored zone rendered).
+
+## Scope (v5 — audit + build readiness added)
 - **Authoritative-first architecture (NEW)**: `/app/backend/server.py` is now proxy-first.
   When `AUTHORITATIVE_UPSTREAM_URL` + `AUTHORITATIVE_UPSTREAM_TOKEN` are configured,
   every `POST /api/assessments` delegates classification to the official Express
