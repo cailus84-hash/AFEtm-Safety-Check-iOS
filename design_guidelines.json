@@ -1,0 +1,176 @@
+{
+  "app_name": "AFEtm Safety Check",
+  "personality": "7 Dark-First Utility with neon-glow highlights",
+  "personality_one_liner": "A dark, highly technical cardiovascular command center that prioritizes immediate athletic data legibility through neon-glow indicators and metallic accents.",
+  "color": {
+    "surface": "#0A0A0A",
+    "onSurface": "#FFFFFF",
+    "surfaceSecondary": "#1A1A1A",
+    "onSurfaceSecondary": "#E5E5E5",
+    "surfaceTertiary": "#262626",
+    "onSurfaceTertiary": "#A3A3A3",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#0A0A0A",
+    "brand": "#D4AF37",
+    "brandPrimary": "#3B82F6",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D4AF37",
+    "onBrandSecondary": "#000000",
+    "brandTertiary": "#1E3A8A",
+    "onBrandTertiary": "#93C5FD",
+    "success": "#22C55E",
+    "onSuccess": "#000000",
+    "warning": "#F59E0B",
+    "onWarning": "#000000",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#333333",
+    "borderStrong": "#4D4D4D",
+    "divider": "#1F1F1F"
+  },
+  "typography": {
+    "displayFontFamily": "Rajdhani",
+    "textFontFamily": "IBM Plex Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 32,
+      "4xl": 48
+    }
+  },
+  "spacing": {
+    "rule": "Use tight spacing for data grids and generous spacing for section separation. Primary CTA buttons must be sticky at the bottom with safe area padding.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 4,
+    "md": 8,
+    "lg": 12,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "MaterialCommunityIcons",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": ["Use solid dark surfaces with subtle borders instead of blur to maintain a stark, utilitarian, machine-like aesthetic."],
+    "dont's": ["Do not use blur or glass panels; they soften the aesthetic too much for this technical tool."]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-blur",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding",
+      "purpose": "Introduce the tool's purpose and establish the visual identity.",
+      "states": {
+        "loading": "Spinner centered on dark background",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed background image (`onboarding_bg`) with vertical gradient scrim (transparent to #0A0A0A at bottom). Top: AFE Gold logo text. Center: 'Before Training. Before Competition. Before Pushing Harder.' in display font. Bottom: Primary CTA 'Comenzar' above safe area."
+    },
+    {
+      "name": "Profile Setup",
+      "purpose": "Collect baseline athlete data (Name, Age, Weight, Sport) locally.",
+      "states": {
+        "loading": "Skeleton inputs",
+        "empty": "N/A",
+        "error": "Standard error toast"
+      },
+      "layout": "Header with 'Perfil del Atleta'. Single column form with labels above inputs (surfaceTertiary background). KeyboardAvoidingView. Sticky 'Guardar Perfil' button at the bottom."
+    },
+    {
+      "name": "Home",
+      "purpose": "Command center showing the last assessment state and initiating a new check.",
+      "states": {
+        "loading": "Skeleton card for last check",
+        "empty": "Card displaying 'Sin evaluaciones previas. Realiza tu primer Safety Check.'",
+        "error": "Card with retry button"
+      },
+      "layout": "Top header with 'AFE Safety Check'. Hero Card: Last assessment. The card should have a solid border colored by the last assessment zone (Blue, Green, Yellow, or Red) and a subtle inner shadow of the same color to simulate neon glow. Displays Zone name, FCP objective, and date. Grid below: Quick stats. Bottom: Sticky, full-width primary CTA 'Nuevo Safety Check'."
+    },
+    {
+      "name": "Assessment Flow",
+      "purpose": "Guided step-by-step data entry for the recovery check.",
+      "states": {
+        "loading": "Inline spinner on save",
+        "empty": "N/A",
+        "error": "Error message indicating missing fields"
+      },
+      "layout": "Progress bar at top. Pager or conditional rendering for steps. Step 1: Input Rest HR. Step 2: Show calculated FCP. Step 3: Input HR at 0s, 30s, 60s, 90s, 120s, 180s (grid of numeric inputs). Step 4: Contextual toggles (0, 1, 2 scores) for Sleep, Hydration, etc. Sticky 'Siguiente' / 'Finalizar' button."
+    },
+    {
+      "name": "Result",
+      "purpose": "Deliver the final safety zone calculation and pattern clearly and authoritatively.",
+      "states": {
+        "loading": "Simulated calculation animation with neon elements",
+        "empty": "N/A",
+        "error": "Calculation error text with 'Reintentar' button"
+      },
+      "layout": "Scrollable view. Top Hero: MASSIVE color banner matching the result zone (Blue/Green/Yellow/Red) with the zone name and Pattern (e.g., RAPID, NORMAL). Next section: 2x2 grid of metrics (HRR, RECpct, AURC, tau) in condensed display font. Next: Action recommendation ('Continue', 'Observe', etc.). Bottom: Mandatory legal disclaimer 'No es una aplicación de diagnóstico médico' in surfaceTertiary box. Sticky 'Volver al Inicio' CTA."
+    },
+    {
+      "name": "History",
+      "purpose": "Log of all past assessments for trend observation.",
+      "states": {
+        "loading": "List skeleton",
+        "empty": "Illustration/Icon with 'No hay historial disponible.'",
+        "error": "Retry button"
+      },
+      "layout": "FlatList of past assessments. Each row card uses `surfaceSecondary`. Left edge of the card has a 4px solid border matching the assessment's color zone (Blue/Green/Yellow/Red). Shows Date, Pattern, and Zone name."
+    }
+  ],
+  "images": {
+    "onboarding_bg": {
+      "url": "https://images.pexels.com/photos/9665181/pexels-photo-9665181.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Abstract cosmic dust particles resembling a starry night sky"
+    },
+    "athlete_running_bg": {
+      "url": "https://images.pexels.com/photos/15875672/pexels-photo-15875672.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Silhouette of a man jogging at twilight"
+    },
+    "athlete_cycling_bg": {
+      "url": "https://images.unsplash.com/photo-1548422392-679e1fc2eba4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxzaWxob3VldHRlJTIwY3ljbGlzdCUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4NzQwMDEzM3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "silhouette of person cycling during night"
+    }
+  },
+  "haptics": {
+    "primary_button_press": "impactMedium",
+    "tab_change": "selection",
+    "step_complete": "impactLight",
+    "assessment_complete": "notificationSuccess",
+    "zone_alert_red": "notificationError",
+    "zone_alert_yellow": "notificationWarning"
+  },
+  "instructions_to_main_agent": [
+    "Strictly enforce Spanish language across all copy.",
+    "The app must be heavily dark-themed. Use the #0A0A0A surface color as the root background.",
+    "ZONE COLORS ARE CRITICAL: Use the explicit hex codes defined in the palette for Blue (#3B82F6), Green (#22C55E), Yellow (#F59E0B), and Red (#EF4444). Do not alter these hues.",
+    "Implement the 'neon-glow' aesthetic on the Home card and Results screen by applying a subtle drop shadow (e.g., `shadowColor`, `shadowOpacity: 0.8`, `shadowRadius: 8`) utilizing the specific zone color.",
+    "Ensure the legal disclaimer 'No es una aplicación de diagnóstico médico' is persistently visible at the bottom of the Result screen.",
+    "Do not use blurry glassmorphism; keep panels solid with sharp colors to maintain the technical/athletic 'command center' feel.",
+    "Typography: Use Rajdhani for all large metrics, zone titles, and headers. Use IBM Plex Sans for body text, labels, and standard reading text.",
+    "For lists (History), utilize a left-border color strip on the card to indicate the zone, rather than flooding the entire card with color."
+  ]
+}

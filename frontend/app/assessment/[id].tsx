@@ -1,0 +1,423 @@
+import { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Assessment, deleteAssessment, getAssessment } from '@/src/lib/api';
+import {
+  colors,
+  radius,
+  shared,
+  spacing,
+  zoneColor,
+  zoneLabel,
+  zoneDescription,
+  patternLabel,
+} from '@/src/lib/theme';
+
+const TIMES = ['0', '30', '60', '90', '120', '180'];
+
+function fmt(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-ES', {
+    day: '2-digit', month: 'long', year: 'numeric',
+  }) + ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+export default function AssessmentDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const [a, setA] = useState<Assessment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!id) return;
+        setA(await getAssessment(id));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  const remove = async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      await deleteAssessment(id);
+      router.replace('/(tabs)/history');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[shared.screen, { alignItems: 'center', justifyContent: 'center' }]} testID="detail-loading">
+        <ActivityIndicator color={colors.brandGold} />
+      </View>
+    );
+  }
+
+  if (!a) {
+    return (
+      <SafeAreaView style={shared.screen}>
+        <View style={{ padding: spacing.xl }}>
+          <Text style={shared.h2}>Evaluación no encontrada</Text>
+          <Pressable style={[shared.primaryBtn, { marginTop: spacing.lg }]} onPress={() => router.replace('/(tabs)')}>
+            <Text style={shared.primaryBtnText}>Volver</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const color = zoneColor(a.zone);
+
+  return (
+    <SafeAreaView style={shared.screen} edges={['top']} testID="assessment-detail-screen">
+      <View style={styles.topBar}>
+        <Pressable onPress={() => router.back()} testID="detail-back-btn" style={styles.iconBtn}>
+          <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
+        </Pressable>
+        <Text style={styles.topTitle}>Resultado</Text>
+        <Pressable
+          onPress={() => setConfirmDel((v) => !v)}
+          testID="detail-delete-toggle"
+          style={styles.iconBtn}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.onSurfaceTertiary} />
+        </Pressable>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
+        {/* Zone banner */}
+        <View
+          style={[
+            styles.banner,
+            { borderColor: color, shadowColor: color },
+          ]}
+          testID="result-zone-banner"
+        >
+          <LinearGradient
+            colors={[`${color}30`, 'transparent']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.bannerIcon, { borderColor: color, shadowColor: color }]}>
+            <MaterialCommunityIcons
+              name={
+                a.zone === 'BLUE' ? 'shield-check'
+                : a.zone === 'GREEN' ? 'chart-line-variant'
+                : a.zone === 'YELLOW' ? 'alert'
+                : 'alert-octagon'
+              }
+              size={28}
+              color={color}
+            />
+          </View>
+          <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
+          <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone)}</Text>
+          <Text style={styles.bannerDesc}>{zoneDescription(a.zone)}</Text>
+          <View style={styles.bannerRow}>
+            <View style={styles.bannerChip}>
+              <Text style={styles.bannerChipLabel}>PATRÓN</Text>
+              <Text style={styles.bannerChipValue}>{patternLabel(a.pattern)}</Text>
+            </View>
+            <View style={styles.bannerChip}>
+              <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
+              <Text style={styles.bannerChipValue}>{a.action}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.date}>{fmt(a.created_at)}</Text>
+
+        {/* Metrics grid */}
+        <Text style={styles.sectionTitle}>Métricas de recuperación</Text>
+        <View style={styles.metricsGrid}>
+          <Metric label="HRR" value={`${a.hrr}`} unit="bpm" hint="Caída 1 min" />
+          <Metric label="RECpct" value={`${a.recpct}`} unit="%" hint="Recuperación 3 min" />
+          <Metric label="AURC" value={`${a.aurc}`} unit="" hint="Área bajo curva" />
+          <Metric label="τ (tau)" value={`${a.tau}`} unit="s" hint="Cinética" />
+        </View>
+
+        {/* Reference */}
+        <Text style={styles.sectionTitle}>Datos de referencia</Text>
+        <View style={styles.refGrid}>
+          <RefItem label="FCr" value={`${a.fcr}`} unit="bpm" />
+          <RefItem label="FC pico" value={`${a.hr_peak}`} unit="bpm" />
+          <RefItem label="FCP objetivo" value={`${a.fcp_target}`} unit="bpm" />
+          <RefItem label="Edad" value={`${a.age}`} unit="años" />
+        </View>
+
+        {/* Curve readings */}
+        <Text style={styles.sectionTitle}>Curva de recuperación</Text>
+        <View style={styles.curveWrap}>
+          {TIMES.map((t) => (
+            <View key={t} style={styles.curveItem}>
+              <Text style={styles.curveTime}>{t}s</Text>
+              <Text style={styles.curveHr}>{a.readings[t]}</Text>
+              <Text style={styles.curveUnit}>bpm</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* FCPv */}
+        <Text style={styles.sectionTitle}>Contexto preventivo (FCPv)</Text>
+        <View style={[shared.card, { padding: spacing.md }]}>
+          <FcpvRow label="Sueño" value={a.fcpv.sleep} />
+          <FcpvRow label="Hidratación" value={a.fcpv.hydration} />
+          <FcpvRow label="Síntomas" value={a.fcpv.symptoms} />
+          <FcpvRow label="Enfermedad reciente" value={a.fcpv.recent_illness} />
+          <FcpvRow label="Carga subjetiva" value={a.fcpv.subjective_load} />
+          <View style={styles.fcpvTotalRow}>
+            <Text style={styles.fcpvTotalLabel}>TOTAL</Text>
+            <Text style={styles.fcpvTotalValue}>{a.fcpv_total} / 10</Text>
+          </View>
+          {a.context_flag ? (
+            <View style={styles.contextFlag}>
+              <MaterialCommunityIcons name="alert-outline" size={14} color={colors.zoneYellow} />
+              <Text style={styles.contextFlagText}>
+                Contexto elevado. Considera atenuar la carga aun si la zona
+                calculada es favorable.
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Disclaimer */}
+        <View style={styles.disclaimer} testID="result-disclaimer">
+          <MaterialCommunityIcons name="information-outline" size={16} color={colors.onSurfaceTertiary} />
+          <Text style={styles.disclaimerText}>
+            No es una aplicación de diagnóstico médico. AFE™ Safety Check
+            apoya decisiones preventivas y no sustituye la evaluación
+            profesional. Ante síntomas preocupantes, detén la actividad y
+            sigue los protocolos de seguridad correspondientes.
+          </Text>
+        </View>
+
+        {confirmDel ? (
+          <View style={styles.deleteBox}>
+            <Text style={[shared.body, { marginBottom: spacing.md }]}>
+              ¿Eliminar esta evaluación? Esta acción no se puede deshacer.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <Pressable
+                style={[shared.secondaryBtn, { flex: 1 }]}
+                onPress={() => setConfirmDel(false)}
+                testID="detail-delete-cancel"
+              >
+                <Text style={shared.secondaryBtnText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                testID="detail-delete-confirm"
+                disabled={deleting}
+                style={[shared.primaryBtn, { flex: 1, backgroundColor: colors.zoneRed }]}
+                onPress={remove}
+              >
+                {deleting ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={[shared.primaryBtnText, { color: '#fff' }]}>Eliminar</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable
+          testID="detail-home-btn"
+          style={({ pressed }) => [shared.primaryBtn, pressed && { opacity: 0.9 }]}
+          onPress={() => router.replace('/(tabs)')}
+        >
+          <Text style={shared.primaryBtnText}>Volver al inicio</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function Metric({ label, value, unit, hint }: { label: string; value: string; unit: string; hint: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+        <Text style={styles.metricValue}>{value}</Text>
+        {unit ? <Text style={styles.metricUnit}>{unit}</Text> : null}
+      </View>
+      <Text style={styles.metricHint}>{hint}</Text>
+    </View>
+  );
+}
+
+function RefItem({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <View style={styles.refItem}>
+      <Text style={styles.refLabel}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+        <Text style={styles.refValue}>{value}</Text>
+        <Text style={styles.refUnit}>{unit}</Text>
+      </View>
+    </View>
+  );
+}
+
+function FcpvRow({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.fcpvRow}>
+      <Text style={styles.fcpvLabel}>{label}</Text>
+      <View style={styles.fcpvDots}>
+        {[0, 1, 2].map((n) => {
+          const active = n <= value;
+          const c =
+            value === 0 ? colors.zoneGreen : value === 1 ? colors.zoneYellow : colors.zoneRed;
+          return (
+            <View
+              key={n}
+              style={[
+                styles.fcpvDot,
+                { backgroundColor: active ? c : colors.surfaceTertiary, borderColor: active ? c : colors.border },
+              ]}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
+  },
+  topTitle: { color: colors.onSurface, fontSize: 15, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  banner: {
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    padding: spacing.xl,
+    backgroundColor: colors.surfaceSecondary,
+    shadowOpacity: 0.7, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  bannerIcon: {
+    width: 52, height: 52, borderRadius: 26,
+    borderWidth: 2,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+    marginBottom: spacing.md,
+  },
+  bannerEyebrow: { color: colors.onSurfaceTertiary, fontSize: 11, letterSpacing: 3, fontWeight: '700' },
+  bannerZone: { fontSize: 32, fontWeight: '900', letterSpacing: 0.5, marginTop: 6 },
+  bannerDesc: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  bannerRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  bannerChip: {
+    flex: 1,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  bannerChipLabel: { color: colors.onSurfaceTertiary, fontSize: 10, letterSpacing: 1, fontWeight: '700' },
+  bannerChipValue: { color: colors.onSurface, fontSize: 14, fontWeight: '800', marginTop: 4 },
+  date: {
+    color: colors.onSurfaceTertiary, fontSize: 12,
+    textAlign: 'center', marginTop: spacing.lg,
+    letterSpacing: 0.5,
+  },
+  sectionTitle: {
+    color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700',
+    marginTop: spacing.xl, marginBottom: spacing.md,
+  },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  metric: {
+    width: '48%',
+    padding: spacing.md,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  metricLabel: { color: colors.brandGold, fontSize: 11, letterSpacing: 1, fontWeight: '700' },
+  metricValue: { color: colors.onSurface, fontSize: 28, fontWeight: '900', marginTop: 4 },
+  metricUnit: { color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: '600' },
+  metricHint: { color: colors.onSurfaceTertiary, fontSize: 10, marginTop: 4 },
+  refGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  refItem: {
+    flexGrow: 1, minWidth: '47%',
+    padding: spacing.sm + 2,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  refLabel: { color: colors.onSurfaceTertiary, fontSize: 10, letterSpacing: 1, fontWeight: '700' },
+  refValue: { color: colors.onSurface, fontSize: 18, fontWeight: '800', marginTop: 2 },
+  refUnit: { color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: '600' },
+  curveWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  curveItem: {
+    width: '31%',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  curveTime: { color: colors.brandGold, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  curveHr: { color: colors.onSurface, fontSize: 22, fontWeight: '900', marginTop: 2 },
+  curveUnit: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '600' },
+  fcpvRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
+  },
+  fcpvLabel: { color: colors.onSurfaceSecondary, fontSize: 13, fontWeight: '600' },
+  fcpvDots: { flexDirection: 'row', gap: 6 },
+  fcpvDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1 },
+  fcpvTotalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: spacing.md,
+  },
+  fcpvTotalLabel: { color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700' },
+  fcpvTotalValue: { color: colors.onSurface, fontSize: 18, fontWeight: '900' },
+  contextFlag: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1, borderColor: colors.zoneYellow,
+    backgroundColor: '#1F1A0A',
+  },
+  contextFlagText: { color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 15, flex: 1 },
+  disclaimer: {
+    flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  disclaimerText: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 15, flex: 1 },
+  deleteBox: {
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.zoneRed,
+    backgroundColor: '#1A0A0A',
+  },
+  footer: {
+    padding: spacing.xl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.divider,
+    backgroundColor: colors.surface,
+  },
+});
