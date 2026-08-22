@@ -6,7 +6,9 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
-## Scope (v2)
+## Scope (v3)
+- **Recovery curve chart** (react-native-svg) on the result screen with dashed FCr / FCP reference lines and zone-color gradient
+- **BLE auto-reconnect** with exponential backoff (1s→30s, 8 attempts) + visible reconnect banner during the 3-min recovery window
 - **BLE guided flow** with `react-native-ble-plx` (dev build required — no Expo Go)
 - Manual assessment flow (fallback)
 - Single local profile (no login), device_id auto-persisted via AsyncStorage
@@ -14,7 +16,7 @@ Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 - In-app result summary (no PDF)
 
 ## Tech Stack
-- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, expo-linear-gradient, safe-area-context, @expo/vector-icons
+- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, `react-native-svg`, expo-linear-gradient, safe-area-context, @expo/vector-icons
 - Backend: FastAPI + Motor (MongoDB async), Pydantic v2
 - Storage: MongoDB — `profiles`, `assessments` collections
 

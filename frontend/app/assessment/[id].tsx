@@ -6,12 +6,14 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Assessment, deleteAssessment, getAssessment } from '@/src/lib/api';
+import { RecoveryChart } from '@/src/components/RecoveryChart';
 import {
   colors,
   radius,
@@ -35,6 +37,7 @@ function fmt(iso: string) {
 export default function AssessmentDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [a, setA] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -143,6 +146,20 @@ export default function AssessmentDetail() {
 
         <Text style={styles.date}>{fmt(a.created_at)}</Text>
 
+        {/* Recovery curve chart */}
+        <Text style={styles.sectionTitle}>Curva de recuperación</Text>
+        <View testID="result-recovery-chart" style={{ alignItems: 'center' }}>
+          <RecoveryChart
+            readings={a.readings}
+            times={[0, 60, 90, 120, 150, 180]}
+            fcr={a.fcr}
+            fcpTarget={a.fcp_target}
+            zoneColor={color}
+            width={Math.min(width - spacing.xl * 2, 360)}
+            height={210}
+          />
+        </View>
+
         {/* Metrics grid */}
         <Text style={styles.sectionTitle}>Métricas de recuperación</Text>
         <View style={styles.metricsGrid}>
@@ -162,7 +179,7 @@ export default function AssessmentDetail() {
         </View>
 
         {/* Curve readings */}
-        <Text style={styles.sectionTitle}>Curva de recuperación</Text>
+        <Text style={styles.sectionTitle}>Lecturas por checkpoint</Text>
         <View style={styles.curveWrap}>
           {TIMES.map((t) => (
             <View key={t} style={styles.curveItem}>

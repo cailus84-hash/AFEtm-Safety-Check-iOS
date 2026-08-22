@@ -47,6 +47,12 @@ export default function Guided() {
 
   const pulse = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<any>(null);
+  const capturedRef = useRef<Record<string, number>>({});
+  const hrPeakRef = useRef<number | null>(null);
+
+  // Keep refs in sync so the recovery interval sees fresh values
+  useEffect(() => { capturedRef.current = captured; }, [captured]);
+  useEffect(() => { hrPeakRef.current = hrPeak; }, [hrPeak]);
 
   // Load profile once
   useEffect(() => {
@@ -124,10 +130,20 @@ export default function Guided() {
       // Capture windows at 60,90,120,150,180 — using average of last 5s
       for (const t of CAPTURE_TIMES) {
         const key = String(t);
-        if (s >= t && captured[key] === undefined) {
-          const avg = hr.averageLastMs(5_000) ?? hr.hr ?? 0;
-          if (avg > 0) {
-            setCaptured((prev) => ({ ...prev, [key]: avg }));
+        if (capturedRef.current[key] !== undefined) continue;
+        // Grace: capture as soon as the checkpoint is reached OR within 8s
+        // afterwards while waiting for reconnection.
+        const withinCapture = s >= t;
+        const withinGrace = s >= t && s <= t + 8;
+        if (withinCapture) {
+          const avg = hr.averageLastMs(5_000);
+          const live = hr.hr;
+          const value = avg && avg > 0 ? avg : (live && live > 0 ? live : 0);
+          if (value > 0) {
+            setCaptured((prev) => ({ ...prev, [key]: value }));
+          } else if (!withinGrace) {
+            // Fallback so we never end with a zero reading if grace expired.
+            setCaptured((prev) => ({ ...prev, [key]: hrPeakRef.current ?? 0 }));
           }
         }
       }
@@ -248,7 +264,17 @@ export default function Guided() {
           <FcpPhase fcpTarget={fcpTarget} hrValue={hr.hr} fcr={fcr!} onStart={markPeakAndStart} />
         )}
         {phase === 'recovery' && (
-          <RecoveryPhase elapsed={elapsed} captured={captured} hrPeak={hrPeak} fcr={fcr!} />
+          <>
+            {hr.isReconnecting && (
+              <View style={styles.reconnectBanner} testID="guided-reconnect-banner">
+                <ActivityIndicator color={colors.zoneYellow} size="small" />
+                <Text style={styles.reconnectText}>
+                  Reconectando con el pulsómetro… El cronómetro sigue activo. Intento {hr.reconnectAttempt}.
+                </Text>
+              </View>
+            )}
+            <RecoveryPhase elapsed={elapsed} captured={captured} hrPeak={hrPeak} fcr={fcr!} />
+          </>
         )}
         {phase === 'submit' && (
           <View style={[shared.card, { alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }]}>
@@ -322,12 +348,16 @@ function phaseLabel(p: Phase) {
 // ---------------- Sub-components ----------------
 
 function ConnectionPill({ hr }: { hr: ReturnType<typeof useHeartRateMonitor> }) {
-  const dotColor = hr.status === 'connected' ? colors.zoneGreen
+  const reconnecting = hr.isReconnecting;
+  const dotColor = reconnecting ? colors.zoneYellow
+    : hr.status === 'connected' ? colors.zoneGreen
     : hr.status === 'scanning' || hr.status === 'connecting' ? colors.zoneYellow
     : colors.onSurfaceTertiary;
-  const label = hr.connectedDevice?.name ?? (hr.status === 'scanning' ? 'Escaneando…' : 'Sin conexión');
+  const label = reconnecting
+    ? `Reconectando… (${hr.reconnectAttempt})`
+    : hr.connectedDevice?.name ?? (hr.status === 'scanning' ? 'Escaneando…' : 'Sin conexión');
   return (
-    <View style={styles.connRow}>
+    <View style={styles.connRow} testID="guided-connection-pill">
       <View style={[styles.connDot, { backgroundColor: dotColor, shadowColor: dotColor }]} />
       <Text style={styles.connText} numberOfLines={1}>{label}</Text>
     </View>
@@ -645,4 +675,11 @@ const styles = StyleSheet.create({
   captureValue: { color: colors.onSurface, fontSize: 20, fontWeight: '900', marginTop: 4 },
   captureUnit: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '600' },
   error: { color: colors.zoneRed, fontSize: 13, fontWeight: '600', marginTop: spacing.lg },
+  reconnectBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    padding: spacing.md, marginTop: spacing.lg,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.zoneYellow,
+    backgroundColor: '#1F1A0A',
+  },
+  reconnectText: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 16, flex: 1 },
 });
