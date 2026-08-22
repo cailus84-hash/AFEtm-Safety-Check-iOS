@@ -1,0 +1,34 @@
+{
+  "summary": "AFEtm PROXY-FIRST fix VERIFIED. Backend now correctly delegates classification to the authoritative Express upstream when both AUTHORITATIVE_UPSTREAM_URL and AUTHORITATIVE_UPSTREAM_TOKEN are set, and falls back to a labelled REFERENCE MIRROR on any failure (empty config, 401, 404, timeout, missing critical fields). New test file /app/backend/tests/test_afetm_proxy.py: 6/6 PASSED. Legacy regression /app/backend/tests/test_afetm_backend.py: 13/13 PASSED sequentially. Combined 19/19 PASSED. Verified: (1) GET /api/ returns upstream_configured=false, calc_source_default='reference-mirror', reference_notice populated (REF MIRROR text) with current empty-token .env; (2) POST /api/assessments stamps calc_source='reference-mirror' + calc_notice with REFERENCE MIRROR text when token empty; math still correct (fcp_target=152 for age=30, hrr=hrs[0]-hrs[1]=15, recpct≈66.7 → RAPID → BLUE); (3) list & detail endpoints both expose calc_source + calc_notice fields, no _id leak; (4) Legacy Mongo doc inserted without calc_source deserializes with Pydantic default 'reference-mirror' via GET /api/assessments/{id}; (5) With token temporarily patched to 'test-invalid-token' + backend restart, upstream_configured=true, calc_source_default='authoritative'; POST returns 200 with calc_source='reference-mirror' proving graceful 401→fallback path; math intact (BLUE zone). .env fully restored to empty token post-test and upstream_configured returned to false (verified via curl post-teardown). Frontend static review confirms /app/frontend/app/assessment/[id].tsx:243-251 renders yellow banner with testID='calc-source-banner' only when calc_source !== 'authoritative', showing calc_notice; api.ts adds optional calc_source/calc_notice fields (non-breaking). server.py has explicit WARNING comment block at lines 94-100 identifying reference mirror zone thresholds and pattern heuristics as non-authoritative. Native build readiness: app.json has react-native-ble-plx plugin, all 5 Android BLE permissions, iOS NSBluetoothAlwaysUsageDescription, both bundleIdentifier & package set. NO react-native issues detected in the changes for this iteration. Testing scope was BACKEND ONLY as requested; frontend was verified only via static code review of the banner and Assessment type.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_afetm_proxy.py",
+    "/app/backend/tests/test_afetm_backend.py",
+    "/app/test_reports/pytest/afetm_proxy_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:226-277 _try_upstream_compute correctly returns None on missing URL/TOKEN, on r.status_code>=400 (401/404 etc.), on network/parse Exception, and when any of {fcp_target,hrr,recpct,pattern,zone} is missing — all funneled into reference-mirror fallback in create_assessment (lines 280-307).",
+    "server.py:198-205 root endpoint correctly gates upstream_configured on BOTH URL AND TOKEN being non-empty (bool(URL and TOKEN)); reference_notice is only surfaced when unconfigured.",
+    "server.py:90-91 Assessment model uses Pydantic default calc_source='reference-mirror' and Optional[str] calc_notice → legacy Mongo docs without these fields deserialize safely (verified via direct pymongo insert test).",
+    "server.py:305-306 doc.copy() is inserted into Mongo (so Mongo can add _id to that copy) while doc.pop('_id', None) then returned — no _id leak (verified across POST/GET-list/GET-detail).",
+    "server.py:94-100 explicit WARNING docstring flags the local block as non-authoritative for zone thresholds and pattern heuristics, referencing afeRecoveryEngine.ts as the source of truth — matches AFEtm v3.1 spec §14.",
+    "assessment/[id].tsx:243-251 banner renders ONLY when calc_source is set AND != 'authoritative'; falls back to a generic Spanish string only if calc_notice is empty; testID='calc-source-banner' present.",
+    "api.ts Assessment type additions are optional (`calc_source?`, `calc_notice?`), so existing consumers cannot break."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_afetm_proxy.py (new)"
+  ],
+  "success_rate": { "backend": "100% (19/19 tests: 6 new proxy + 13 regression)", "frontend": "not tested (backend-only request); static review passed" },
+  "seed_data_creation": "TEST_proxy_* device_id assessments (auto-cleaned by module-scope fixture) + one TEST_legacy_* raw Mongo doc inserted and immediately deleted within the same test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_afetm_proxy.py. The invalid-token test MUTATES /app/backend/.env and restarts backend; DO NOT run this file in parallel with test_afetm_backend.py (xdist causes 502s on the other worker during restart). Use `-o addopts=''` to override pytest.ini's xdist config, or run the two files in separate invocations. Root URL from EXPO_PUBLIC_BACKEND_URL in /app/frontend/.env. Fallback path is CORRECT when: (a) token empty, (b) token invalid (401), (c) upstream 404/timeout, (d) response missing any of {fcp_target,hrr,recpct,pattern,zone}. Real upstream URL https://pulso-activo--cailus84.replit.app is reachable and returns 401 without valid creds.",
+  "rca_of_issue": "N/A - Bug fix verified. Original audit concern (mobile independently recreated classification algorithm) is resolved by the proxy-first architecture: when upstream is configured, calculation is delegated; when not, response is stamped calc_source='reference-mirror' with a visible calc_notice so UI can show a warning banner. No new bugs found."
+}

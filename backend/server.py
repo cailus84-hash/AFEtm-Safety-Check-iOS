@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import httpx
 import os
 import logging
 from pathlib import Path
@@ -16,6 +17,16 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# --- AFEtm authoritative upstream configuration ---
+# The AFEtm technical spec (v3.1) mandates that "el servidor conserva los
+# motores de cálculo como única fuente oficial". If UPSTREAM is configured,
+# every classification decision is delegated to that server. Otherwise, we
+# use a REFERENCE MIRROR that faithfully implements the documented formulas
+# BUT whose classification thresholds are heuristic — clearly labelled as
+# such via `_calc_source: "reference-mirror"` and a UI banner.
+AUTHORITATIVE_UPSTREAM_URL = (os.environ.get('AUTHORITATIVE_UPSTREAM_URL') or '').rstrip('/')
+AUTHORITATIVE_UPSTREAM_TOKEN = os.environ.get('AUTHORITATIVE_UPSTREAM_TOKEN') or ''
 
 app = FastAPI(title="AFEtm Safety Check API")
 api_router = APIRouter(prefix="/api")
@@ -76,10 +87,24 @@ class Assessment(BaseModel):
     fcpv_total: int
     context_flag: bool
     created_at: str
+    calc_source: str = "reference-mirror"  # "authoritative" | "reference-mirror"
+    calc_notice: Optional[str] = None      # explanation shown to the user
 
 
-# ---------- Calculation engine ----------
+# ---------- Calculation engine (REFERENCE MIRROR — see doc §14) ----------
+# WARNING: This block implements the documented FORMULAS (FCP, HRR, RECpct,
+# AURC, tau) faithfully but the zone THRESHOLDS and PATTERN heuristics below
+# are NOT specified by the technical document verbatim — the document defers
+# them to `afeRecoveryEngine.ts` (v2) which lives on the authoritative
+# Express server. Whenever `AUTHORITATIVE_UPSTREAM_URL` + a valid token are
+# provided, this block MUST be bypassed by the proxy path.
 TIMES = [0, 60, 90, 120, 150, 180]
+
+REFERENCE_NOTICE = (
+    "Motor de cálculo local (REFERENCE MIRROR). Umbrales de zona y patrón "
+    "no autoritativos. Configura AUTHORITATIVE_UPSTREAM_URL + TOKEN para "
+    "delegar al servidor oficial (afeRecoveryEngine.ts)."
+)
 
 
 def calc_fcp(age: int) -> int:
@@ -170,7 +195,14 @@ def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str
 # ---------- Routes ----------
 @api_router.get("/")
 async def root():
-    return {"service": "AFEtm Safety Check", "status": "ok"}
+    upstream_configured = bool(AUTHORITATIVE_UPSTREAM_URL and AUTHORITATIVE_UPSTREAM_TOKEN)
+    return {
+        "service": "AFEtm Safety Check",
+        "status": "ok",
+        "upstream_configured": upstream_configured,
+        "calc_source_default": "authoritative" if upstream_configured else "reference-mirror",
+        "reference_notice": REFERENCE_NOTICE if not upstream_configured else None,
+    }
 
 
 @api_router.post("/profile", response_model=Profile)
@@ -191,9 +223,71 @@ async def get_profile(device_id: str = Query(...)):
     return doc
 
 
+async def _try_upstream_compute(a: "AssessmentIn") -> Optional[dict]:
+    """Delegate calculation to the authoritative upstream server.
+
+    Returns a dict with the derived fields (fcp_target, hr_peak, hrr,
+    recpct, aurc, tau, pattern, zone, action, fcpv_total, context_flag)
+    on success, or None on any auth/network/parse failure so the caller
+    can gracefully fall back to the reference mirror.
+    """
+    if not AUTHORITATIVE_UPSTREAM_URL or not AUTHORITATIVE_UPSTREAM_TOKEN:
+        return None
+    url = f"{AUTHORITATIVE_UPSTREAM_URL}/api/assessments"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {AUTHORITATIVE_UPSTREAM_TOKEN}",
+    }
+    payload = {
+        "fcr": a.fcr,
+        "age": a.age,
+        "readings": a.readings,
+        "fcpv": a.fcpv.model_dump(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.post(url, headers=headers, json=payload)
+        if r.status_code >= 400:
+            logging.warning("Upstream returned %s: %s", r.status_code, r.text[:200])
+            return None
+        data = r.json()
+        # Accept several field shapes: keep what we can identify.
+        derived = {
+            "fcp_target": data.get("fcp_target") or data.get("fcp"),
+            "hr_peak": data.get("hr_peak") or a.readings.get("0"),
+            "hrr": data.get("hrr"),
+            "recpct": data.get("recpct"),
+            "aurc": data.get("aurc"),
+            "tau": data.get("tau"),
+            "pattern": data.get("pattern"),
+            "zone": data.get("zone"),
+            "action": data.get("action") or "",
+            "fcpv_total": data.get("fcpv_total")
+                or int(sum(a.fcpv.model_dump().values())),
+            "context_flag": data.get("context_flag", False),
+        }
+        # Reject if any critical field is missing.
+        for k in ("fcp_target", "hrr", "recpct", "pattern", "zone"):
+            if derived.get(k) in (None, ""):
+                logging.warning("Upstream response missing '%s' — falling back", k)
+                return None
+        return derived
+    except Exception as e:
+        logging.warning("Upstream call failed: %s", e)
+        return None
+
+
 @api_router.post("/assessments", response_model=Assessment)
 async def create_assessment(a: AssessmentIn):
-    derived = calc_assessment(a.fcr, a.age, a.readings, a.fcpv.model_dump())
+    upstream = await _try_upstream_compute(a)
+    if upstream is not None:
+        derived = upstream
+        calc_source = "authoritative"
+        calc_notice = None
+    else:
+        derived = calc_assessment(a.fcr, a.age, a.readings, a.fcpv.model_dump())
+        calc_source = "reference-mirror"
+        calc_notice = REFERENCE_NOTICE
     now = datetime.now(timezone.utc).isoformat()
     aid = str(uuid.uuid4())
     doc = {
@@ -204,6 +298,8 @@ async def create_assessment(a: AssessmentIn):
         "readings": a.readings,
         "fcpv": a.fcpv.model_dump(),
         "created_at": now,
+        "calc_source": calc_source,
+        "calc_notice": calc_notice,
         **derived,
     }
     await db.assessments.insert_one(doc.copy())

@@ -240,6 +240,16 @@ export default function AssessmentDetail() {
 
           <Text style={styles.date}>{fmt(a.created_at)}</Text>
 
+          {a.calc_source && a.calc_source !== 'authoritative' ? (
+            <View style={styles.calcSourceBanner} testID="calc-source-banner">
+              <MaterialCommunityIcons name="alert-outline" size={16} color={colors.zoneYellow} />
+              <Text style={styles.calcSourceText}>
+                {a.calc_notice ||
+                  'Cálculo local (referencia). Los umbrales de zona no son autoritativos.'}
+              </Text>
+            </View>
+          ) : null}
+
           {targetMet && (
             <View style={styles.celebrateBanner} testID="celebrate-banner">
               <MaterialCommunityIcons name="trophy" size={20} color={colors.brandGold} />
@@ -556,6 +566,17 @@ const styles = StyleSheet.create({
   },
   celebrateText: {
     color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 0.3, flex: 1,
+  },
+  calcSourceBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.zoneYellow,
+    backgroundColor: '#1F1A0A',
+  },
+  calcSourceText: {
+    color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 15, flex: 1,
   },
   deleteBox: {
     marginTop: spacing.xl,

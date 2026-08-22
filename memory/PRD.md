@@ -6,7 +6,36 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
-## Scope (v5)
+## Scope (v5 — freeze; audit + build readiness added)
+- **Authoritative-first architecture (NEW)**: `/app/backend/server.py` is now proxy-first.
+  When `AUTHORITATIVE_UPSTREAM_URL` + `AUTHORITATIVE_UPSTREAM_TOKEN` are configured,
+  every `POST /api/assessments` delegates classification to the official Express
+  server (`afeRecoveryEngine.ts` — single source of truth per doc v3.1 §14).
+  Fallback to a **REFERENCE MIRROR** is clearly labelled with `calc_source`
+  and a yellow banner is shown in the detail screen.
+- **Native build readiness**: `app.json` includes the `react-native-ble-plx`
+  config plugin, Android `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` /
+  `ACCESS_FINE_LOCATION` permissions, iOS `NSBluetoothAlwaysUsageDescription`,
+  and stable `bundleIdentifier` / `package`. User triggers the build via
+  **Publish → Deploy → Generate iOS/Android builds**.
+
+## Calc audit (v3.1 doc conformance)
+
+| Component | Source | Status |
+|---|---|---|
+| `FCP = round(0.80 × (220 − age))` | doc §6 | Fiel |
+| HRR / RECpct / AURC / tau formulas | doc §6 + Tabla 2 | Fiel |
+| Zone thresholds | `afeRecoveryEngine.ts` (NOT in doc) | **Delegated to upstream** or reference-mirror |
+| Pattern heuristics | `capa de confiabilidad v3` (NOT in doc) | **Delegated to upstream** or reference-mirror |
+| FCPv (5×0-2, adjusts label not zone) | doc §8 | Fiel |
+| `alertValidation.ts` states | doc §8 | Not implemented (future) |
+| `afetm-mini.ts` (family scoring) | doc §3 | Not implemented (future) |
+
+Reference-mirror computations run only when upstream is unconfigured; every
+such assessment is stamped with `calc_source: "reference-mirror"` and
+`calc_notice` explaining the situation.
+
+## Scope (v5 — features)
 - **Comparar sesiones**: modo multi-selección en el historial (long-press o toggle en el header) → pantalla `/compare` con curvas superpuestas + deltas RECpct/HRR/τ
 - **Zona objetivo**: campo `target_zone` en el perfil (Ninguna / Verde / Azul). Cuando una evaluación iguala o supera el objetivo, se muestra un banner con trofeo y se dispara confetti (una vez por evaluación, con flag persistido en AsyncStorage)
 - **Compartir resultado**: exporta banner + gráfica como PNG (`react-native-view-shot` + `expo-sharing`)

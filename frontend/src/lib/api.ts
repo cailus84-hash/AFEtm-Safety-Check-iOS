@@ -59,6 +59,8 @@ export type Assessment = {
   fcpv_total: number;
   context_flag: boolean;
   created_at: string;
+  calc_source?: 'authoritative' | 'reference-mirror';
+  calc_notice?: string | null;
 };
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {

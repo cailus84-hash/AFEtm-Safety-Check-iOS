@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="6" skipped="0" tests="19" time="6.217" timestamp="2026-08-22T14:42:41.813685+00:00" hostname="agent-env-fdcea8da-cd46-4a41-9009-1d325a9ce527"><testcase classname="tests.test_afetm_proxy" name="test_root_exposes_proxy_metadata" time="0.198" /><testcase classname="tests.test_afetm_backend" name="test_health" time="0.161" /><testcase classname="tests.test_afetm_backend" name="test_profile_get_null_when_missing" time="0.118" /><testcase classname="tests.test_afetm_proxy" name="test_post_assessment_falls_back_when_token_empty" time="0.063" /><testcase classname="tests.test_afetm_proxy" name="test_list_and_detail_expose_calc_fields" time="0.123" /><testcase classname="tests.test_afetm_backend" name="test_profile_upsert_and_get" time="0.259" /><testcase classname="tests.test_afetm_proxy" name="test_legacy_doc_defaults_to_reference_mirror" time="0.132" /><testcase classname="tests.test_afetm_proxy" name="test_reference_mirror_regression_red_zone" time="0.062" /><testcase classname="tests.test_afetm_backend" name="test_assessment_missing_reading_returns_400_old_key_30" time="0.071" /><testcase classname="tests.test_afetm_backend" name="test_assessment_missing_reading_returns_400" time="0.069" /><testcase classname="tests.test_afetm_backend" name="test_assessment_fcp_formula" time="0.070" /><testcase classname="tests.test_afetm_backend" name="test_assessment_red_zone_slow" time="0.066" /><testcase classname="tests.test_afetm_backend" name="test_assessment_flattened_pattern" time="0.484"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_afetm_backend.py:148: in test_assessment_flattened_pattern
+    assert r.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="tests.test_afetm_backend" name="test_assessment_unstable_pattern" time="0.068"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_afetm_backend.py:164: in test_assessment_unstable_pattern
+    assert r.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="tests.test_afetm_backend" name="test_assessment_context_flag" time="0.083"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_afetm_backend.py:177: in test_assessment_context_flag
+    assert r.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="tests.test_afetm_backend" name="test_list_sorted_desc_and_filter_by_device" time="0.068"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_afetm_backend.py:186: in test_list_sorted_desc_and_filter_by_device
+    assert r.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="tests.test_afetm_backend" name="test_get_missing_assessment_returns_404" time="0.070"><failure message="assert 502 == 404&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_afetm_backend.py:203: in test_get_missing_assessment_returns_404
+    assert r.status_code == 404
+E   assert 502 == 404
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="tests.test_afetm_backend" name="test_delete_assessment_and_verify_gone" time="0.142"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_afetm_backend.py:212: in test_delete_assessment_and_verify_gone
+    aid = s.post(f"{API}/assessments", json=payload).json()["id"]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="tests.test_afetm_proxy" name="test_invalid_token_gracefully_falls_back" time="5.286" /></testsuite></testsuites>
