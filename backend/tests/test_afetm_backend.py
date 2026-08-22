@@ -64,7 +64,21 @@ def test_profile_upsert_and_get(s):
 
 # -- Assessment computations --
 def _readings(vals):
-    return {str(t): v for t, v in zip([0, 30, 60, 90, 120, 180], vals)}
+    return {str(t): v for t, v in zip([0, 60, 90, 120, 150, 180], vals)}
+
+
+def test_assessment_missing_reading_returns_400_old_key_30(s):
+    # Old schema had key "30"; new schema requires key "150". Sending old keys must 400.
+    payload = {
+        "device_id": DEV,
+        "fcr": 60,
+        "age": 30,
+        "readings": {"0": 180, "30": 160, "60": 140, "90": 120, "120": 110, "180": 100},
+        "fcpv": {"sleep": 0, "hydration": 0, "symptoms": 0, "recent_illness": 0, "subjective_load": 0},
+    }
+    r = s.post(f"{API}/assessments", json=payload)
+    assert r.status_code == 400
+    assert "150" in r.text
 
 
 def test_assessment_missing_reading_returns_400(s):
@@ -72,11 +86,12 @@ def test_assessment_missing_reading_returns_400(s):
         "device_id": DEV,
         "fcr": 60,
         "age": 30,
-        "readings": {"0": 180, "30": 160, "60": 140, "90": 120, "120": 110},
+        "readings": {"0": 180, "60": 160, "90": 140, "120": 120, "150": 110},
         "fcpv": {"sleep": 0, "hydration": 0, "symptoms": 0, "recent_illness": 0, "subjective_load": 0},
     }
     r = s.post(f"{API}/assessments", json=payload)
     assert r.status_code == 400
+    assert "180" in r.text
 
 
 def test_assessment_fcp_formula(s):
@@ -91,11 +106,16 @@ def test_assessment_fcp_formula(s):
     d = r.json()
     assert d["fcp_target"] == 152
     assert d["hr_peak"] == 180
-    assert d["hrr"] == 180 - 150  # peak - hr_60
+    assert d["hrr"] == 180 - 165  # peak - hr_60 (hrs[1])
     # recpct = (180-100)/(180-60)*100 = 66.7 -> BLUE if RAPID
     assert abs(d["recpct"] - 66.7) < 0.2
     assert d["pattern"] == "RAPID"
     assert d["zone"] == "BLUE"
+    # AURC trapezoidal with new dt segments 60/30/30/30/30:
+    # (180+165)/2*60 + (165+150)/2*30 + (150+135)/2*30 + (135+120)/2*30 + (120+100)/2*30 = 26475
+    assert abs(d["aurc"] - 26475.0) < 0.5
+    # tau: target = 180 - 0.632*(180-60) = 104.16; only hr=100 at t=180 <= target
+    assert d["tau"] == 180.0
     assert "_id" not in d
 
 

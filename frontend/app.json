@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.safetycheckmvp.oxtyov"
+      "bundleIdentifier": "com.emergent.safetycheckmvp.oxtyov",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Conecta con tu pulsómetro para el chequeo AFE.",
+        "NSBluetoothPeripheralUsageDescription": "Conecta con tu pulsómetro para el chequeo AFE."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,14 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.safetycheckmvp.oxtyov"
+      "package": "com.emergent.safetycheckmvp.oxtyov",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -34,6 +45,14 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000000"
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "Permite conectar con tu pulsómetro para el chequeo AFE™ Safety Check."
         }
       ]
     ],

@@ -77,7 +77,7 @@ class Assessment(BaseModel):
 
 
 # ---------- Calculation engine ----------
-TIMES = [0, 30, 60, 90, 120, 180]
+TIMES = [0, 60, 90, 120, 150, 180]
 
 
 def calc_fcp(age: int) -> int:
@@ -91,9 +91,9 @@ def calc_assessment(fcr: int, age: int, readings: Dict[str, int], fcpv: Dict[str
 
     fcp_target = calc_fcp(age)
     hrs = [readings[str(t)] for t in TIMES]
-    hr_peak = hrs[0]
-    hr_60 = hrs[2]
-    hr_180 = hrs[-1]
+    hr_peak = hrs[0]      # t=0 (immediately at end of effort)
+    hr_60 = hrs[1]        # t=60s
+    hr_180 = hrs[-1]      # t=180s
 
     hrr = hr_peak - hr_60
     span = max(hr_peak - fcr, 1)

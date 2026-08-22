@@ -23,7 +23,7 @@ import {
   patternLabel,
 } from '@/src/lib/theme';
 
-const TIMES = ['0', '30', '60', '90', '120', '180'];
+const TIMES = ['0', '60', '90', '120', '150', '180'];
 
 function fmt(iso: string) {
   const d = new Date(iso);

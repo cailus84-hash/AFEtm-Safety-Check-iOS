@@ -1,0 +1,34 @@
+{
+  "summary": "AFEtm v2 BLE integration regression PASSED. Backend: 13/13 pytest passed against public URL — new TIMES [0,60,90,120,150,180] enforced (old key '30' payload returns 400 'Falta lectura en t=150s'), HRR=hr_peak-hr_60 (hrs[1]), AURC trapezoidal over new dt segments 60/30/30/30/30 verified (26475.0), tau at 63.2% decay verified (180.0), zone/pattern rules (BLUE/GREEN/YELLOW/RED, RAPID/NORMAL/DELAYED/FLATTENED/UNSTABLE) hold, no _id leaked. Frontend (mobile viewport 390x844, web preview): home-cta-new now routes to /(tabs)/new which shows new-choice-screen with mode-guided (RECOMENDADO badge + bluetooth icon) and mode-manual (pencil icon), and the ble-web-warning is present on web. mode-guided navigates to /assessment-flow/guided showing guided-unsupported fallback with guided-fallback-manual button that correctly navigates to /assessment-flow/manual. Manual flow renders new reading times only: reading-input-0/60/90/120/150/180 (reading-input-30 absent). Full submit navigates to /assessment/{id}; result page renders Azul zone with HRR=15, RECpct=66.7%, AURC=26475, tau=180s (matches backend). History screen loads with all filter chips (all/blue/green/yellow/red).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (global)", "issue": "Deprecation warnings from RN Web: '\"shadow*\" style props are deprecated. Use \"boxShadow\"'. Cosmetic; affects new.tsx modeGuided/iconWrap, guided.tsx liveCard/connDot, manual.tsx fcpBox/bigInput shadows. Reference: /app/frontend/app/(tabs)/new.tsx:118-141, /app/frontend/app/assessment-flow/guided.tsx:589-591 etc."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_afetm_backend.py",
+    "/app/test_reports/pytest/afetm_results.xml"
+  ],
+  "action_items": [
+    "Optional: migrate shadow* style props to boxShadow (RN Web 0.19+) to silence deprecation warnings.",
+    "Guided BLE happy-path can only be validated on a native dev-build (react-native-ble-plx). The web fallback path is verified."
+  ],
+  "critical_code_review_comments": [
+    "server.py: TIMES=[0,60,90,120,150,180], HRR uses hrs[1]=hr_60, RECpct span floors at 1, AURC trapezoidal over variable dt segments — spec-correct.",
+    "server.py: _id is stripped via projection {_id:0} on GET/LIST/DELETE and doc.pop('_id') after insert — safe.",
+    "(tabs)/new.tsx: Correctly a CHOICE screen with two Pressables and Platform.OS==='web' warning gate — matches request.",
+    "assessment-flow/manual.tsx: TIMES=['0','60','90','120','150','180'] with matching testIDs; validates 40<=hr<=230 and peak >= FCP-20 before submit.",
+    "assessment-flow/guided.tsx: hr.supported=false branch returns testID guided-unsupported with guided-fallback-manual that router.replace('/assessment-flow/manual') — correct fallback."
+  ],
+  "updated_files": ["/app/backend/tests/test_afetm_backend.py"],
+  "success_rate": { "backend": "100% (13/13)", "frontend": "100% of testable flows on web (guided BLE requires native build)" },
+  "seed_data_creation": "TEST_dev_* device_id + profile + several assessments created; fixture teardown deletes all created assessments.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public URL from /app/frontend/.env EXPO_PUBLIC_BACKEND_URL. AFEtm TIMES=[0,60,90,120,150,180]. Home CTA (home-cta-new) -> /(tabs)/new (new-choice-screen) -> mode-guided|mode-manual. Guided on web shows guided-unsupported + guided-fallback-manual. Manual flow at /assessment-flow/manual with 4 steps and reading-input-{0,60,90,120,150,180}. Result at /assessment/{id}. Reuse /app/backend/tests/test_afetm_backend.py.",
+  "rca_of_issue": "N/A - no bugs found."
+}
