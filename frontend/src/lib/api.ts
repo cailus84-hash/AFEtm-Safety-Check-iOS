@@ -28,6 +28,7 @@ export type Profile = {
   age: number;
   weight: number;
   sport: string;
+  target_zone?: 'BLUE' | 'GREEN' | null;
   updated_at?: string;
 };
 

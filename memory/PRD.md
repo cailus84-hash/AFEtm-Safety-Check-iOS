@@ -6,21 +6,22 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
-## Scope (v4)
-- **Compartir resultado**: exporta el banner de zona + gráfica de recuperación como PNG y comparte vía Share Sheet nativo (`react-native-view-shot` + `expo-sharing`)
-- **Tendencia semanal en Home**: sparkline con las últimas 7 evaluaciones (RECpct) + delta pill (± %) con icono trending-up/down
-- **Recordatorios locales**: `expo-notifications` con trigger `WEEKLY`, hora + días de la semana; permisos gestionados con `ensurePermission` y canal Android dedicado
-- **Recovery curve chart** (react-native-svg) en resultado con líneas de referencia FCr / FCP
-- **BLE auto-reconnect** con backoff exponencial + banner "Reconectando…"
-- **BLE guided flow** con `react-native-ble-plx` (dev build required — no Expo Go)
+## Scope (v5)
+- **Comparar sesiones**: modo multi-selección en el historial (long-press o toggle en el header) → pantalla `/compare` con curvas superpuestas + deltas RECpct/HRR/τ
+- **Zona objetivo**: campo `target_zone` en el perfil (Ninguna / Verde / Azul). Cuando una evaluación iguala o supera el objetivo, se muestra un banner con trofeo y se dispara confetti (una vez por evaluación, con flag persistido en AsyncStorage)
+- **Compartir resultado**: exporta banner + gráfica como PNG (`react-native-view-shot` + `expo-sharing`)
+- **Tendencia semanal**: sparkline en Home con las últimas 7 evaluaciones
+- **Recordatorios locales**: `expo-notifications` con trigger WEEKLY
+- **Recovery curve chart** con líneas de referencia FCr / FCP
+- **BLE guiado + auto-reconnect** (`react-native-ble-plx`, dev build required)
 - Manual assessment flow (fallback)
-- Single local profile (no login), device_id auto-persisted via AsyncStorage
-- Spanish only, athlete role only
+- Single local profile (no login)
+- Spanish only
 
 ## Tech Stack
-- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, `react-native-svg`, `react-native-view-shot`, `expo-sharing`, `expo-notifications`, `@react-native-community/datetimepicker`, expo-linear-gradient, safe-area-context, @expo/vector-icons
+- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, `react-native-svg`, `react-native-view-shot`, `react-native-confetti-cannon`, `expo-sharing`, `expo-notifications`, `@react-native-community/datetimepicker`
 - Backend: FastAPI + Motor (MongoDB async), Pydantic v2
-- Storage: MongoDB — `profiles`, `assessments` collections. AsyncStorage — device_id + reminders
+- Storage: MongoDB — `profiles` (con `target_zone`), `assessments` collections. AsyncStorage — device_id, reminders, celebración por evaluación
 
 ## Screens
 1. **Onboarding** (`/`) — brand hero + Comenzar CTA + disclaimer

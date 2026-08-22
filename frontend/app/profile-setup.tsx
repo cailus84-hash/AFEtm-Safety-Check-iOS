@@ -24,6 +24,7 @@ export default function ProfileSetup() {
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
   const [sport, setSport] = useState<string>('Running');
+  const [targetZone, setTargetZone] = useState<'NONE' | 'GREEN' | 'BLUE'>('NONE');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -38,6 +39,7 @@ export default function ProfileSetup() {
         setAge(String(p.age));
         setWeight(String(p.weight));
         setSport(p.sport);
+        setTargetZone(p.target_zone === 'BLUE' ? 'BLUE' : p.target_zone === 'GREEN' ? 'GREEN' : 'NONE');
       }
       setInitializing(false);
     })();
@@ -59,6 +61,7 @@ export default function ProfileSetup() {
         age: ageN,
         weight: weightN,
         sport,
+        target_zone: targetZone === 'NONE' ? null : targetZone,
       });
       router.replace('/(tabs)');
     } catch (e: any) {
@@ -158,6 +161,53 @@ export default function ProfileSetup() {
               </View>
             </View>
 
+            <View>
+              <Text style={shared.label}>Zona objetivo (opcional)</Text>
+              <Text style={[shared.muted, { marginBottom: spacing.sm }]}>
+                Al alcanzar o superar esta zona en un chequeo, lo celebraremos contigo.
+              </Text>
+              <View style={styles.chipsWrap}>
+                {([
+                  { key: 'NONE', label: 'Ninguna', color: colors.onSurfaceTertiary },
+                  { key: 'GREEN', label: 'Verde · Favorable', color: colors.zoneGreen },
+                  { key: 'BLUE', label: 'Azul · Óptimo', color: colors.zoneBlue },
+                ] as const).map((opt) => {
+                  const active = targetZone === opt.key;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      testID={`profile-target-${opt.key.toLowerCase()}`}
+                      onPress={() => setTargetZone(opt.key)}
+                      style={[
+                        styles.chip,
+                        active && {
+                          borderColor: opt.color,
+                          backgroundColor: '#141310',
+                          shadowColor: opt.color,
+                          shadowOpacity: 0.6,
+                          shadowRadius: 8,
+                          shadowOffset: { width: 0, height: 0 },
+                          elevation: 3,
+                        },
+                      ]}
+                    >
+                      {opt.key !== 'NONE' && (
+                        <View
+                          style={{
+                            width: 8, height: 8, borderRadius: 4,
+                            backgroundColor: opt.color, marginRight: 6,
+                          }}
+                        />
+                      )}
+                      <Text style={[styles.chipText, active && { color: opt.color }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             {error ? (
               <Text style={styles.error} testID="profile-error">
                 {error}
@@ -199,6 +249,8 @@ const styles = StyleSheet.create({
   },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceTertiary,

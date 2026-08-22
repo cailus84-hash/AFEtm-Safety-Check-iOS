@@ -54,6 +54,32 @@ export default function ProfileTab() {
               <MaterialCommunityIcons name="run-fast" size={13} color={colors.brandGold} />
               <Text style={styles.sportChipText}>{profile.sport}</Text>
             </View>
+            {profile.target_zone ? (
+              <View
+                style={[
+                  styles.targetChip,
+                  {
+                    borderColor: profile.target_zone === 'BLUE' ? colors.zoneBlue : colors.zoneGreen,
+                    shadowColor: profile.target_zone === 'BLUE' ? colors.zoneBlue : colors.zoneGreen,
+                  },
+                ]}
+                testID="profile-target-chip"
+              >
+                <MaterialCommunityIcons
+                  name="target"
+                  size={13}
+                  color={profile.target_zone === 'BLUE' ? colors.zoneBlue : colors.zoneGreen}
+                />
+                <Text
+                  style={[
+                    styles.targetChipText,
+                    { color: profile.target_zone === 'BLUE' ? colors.zoneBlue : colors.zoneGreen },
+                  ]}
+                >
+                  Objetivo: {profile.target_zone === 'BLUE' ? 'Zona Azul' : 'Zona Verde'}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.statsGrid}>
@@ -176,6 +202,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#141310',
   },
   sportChipText: { color: colors.brandGold, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  targetChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: 6,
+    borderRadius: radius.pill, borderWidth: 1,
+    backgroundColor: '#101410',
+    shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3,
+  },
+  targetChipText: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   statsGrid: {
     flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg,
   },

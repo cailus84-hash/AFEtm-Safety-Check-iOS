@@ -28,6 +28,7 @@ class Profile(BaseModel):
     age: int
     weight: float
     sport: str
+    target_zone: Optional[str] = None  # None | "BLUE" | "GREEN"
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -37,6 +38,7 @@ class ProfileIn(BaseModel):
     age: int
     weight: float
     sport: str
+    target_zone: Optional[str] = None
 
 
 class FCPv(BaseModel):

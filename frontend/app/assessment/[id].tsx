@@ -15,7 +15,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import { Assessment, deleteAssessment, getAssessment } from '@/src/lib/api';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId } from '@/src/lib/api';
 import { RecoveryChart } from '@/src/components/RecoveryChart';
 import {
   colors,
@@ -47,13 +49,32 @@ export default function AssessmentDetail() {
   const [confirmDel, setConfirmDel] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareErr, setShareErr] = useState<string | null>(null);
+  const [targetMet, setTargetMet] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const shareRef = useRef<any>(null);
 
   useEffect(() => {
     (async () => {
       try {
         if (!id) return;
-        setA(await getAssessment(id));
+        const assessment = await getAssessment(id);
+        setA(assessment);
+
+        // Zone objetivo — celebrar la primera vez que se abre este resultado
+        const deviceId = await getDeviceId();
+        const profile = await fetchProfile(deviceId).catch(() => null);
+        const target = profile?.target_zone ?? null;
+        // BLUE > GREEN > YELLOW > RED (higher is better)
+        const rank: Record<string, number> = { RED: 0, YELLOW: 1, GREEN: 2, BLUE: 3 };
+        if (target && rank[assessment.zone] >= rank[target]) {
+          setTargetMet(true);
+          const key = `afetm.celebrated.${assessment.id}`;
+          const already = await AsyncStorage.getItem(key);
+          if (!already) {
+            await AsyncStorage.setItem(key, '1');
+            setShowConfetti(true);
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -129,6 +150,19 @@ export default function AssessmentDetail() {
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="assessment-detail-screen">
+      {showConfetti && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="confetti-overlay">
+          <ConfettiCannon
+            count={140}
+            origin={{ x: -20, y: 0 }}
+            explosionSpeed={340}
+            fallSpeed={2600}
+            fadeOut
+            autoStart
+            colors={[colors.brandGold, colors.zoneBlue, colors.zoneGreen, colors.zoneYellow, colors.onSurface]}
+          />
+        </View>
+      )}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} testID="detail-back-btn" style={styles.iconBtn}>
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
@@ -205,6 +239,15 @@ export default function AssessmentDetail() {
           </View>
 
           <Text style={styles.date}>{fmt(a.created_at)}</Text>
+
+          {targetMet && (
+            <View style={styles.celebrateBanner} testID="celebrate-banner">
+              <MaterialCommunityIcons name="trophy" size={20} color={colors.brandGold} />
+              <Text style={styles.celebrateText}>
+                ¡Alcanzaste tu zona objetivo! Excelente recuperación.
+              </Text>
+            </View>
+          )}
 
           {/* Recovery curve chart */}
           <Text style={styles.sectionTitle}>Curva de recuperación</Text>
@@ -501,6 +544,19 @@ const styles = StyleSheet.create({
     textAlign: 'center', marginTop: spacing.lg,
   },
   shareErr: { color: colors.zoneRed, fontSize: 12, fontWeight: '600', marginTop: spacing.sm },
+  celebrateBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.brandGold,
+    backgroundColor: '#1F1B10',
+    shadowColor: colors.brandGold,
+    shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 5,
+  },
+  celebrateText: {
+    color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 0.3, flex: 1,
+  },
   deleteBox: {
     marginTop: spacing.xl,
     padding: spacing.md,
