@@ -6,19 +6,21 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 
 Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
-## Scope (v3)
-- **Recovery curve chart** (react-native-svg) on the result screen with dashed FCr / FCP reference lines and zone-color gradient
-- **BLE auto-reconnect** with exponential backoff (1s→30s, 8 attempts) + visible reconnect banner during the 3-min recovery window
-- **BLE guided flow** with `react-native-ble-plx` (dev build required — no Expo Go)
+## Scope (v4)
+- **Compartir resultado**: exporta el banner de zona + gráfica de recuperación como PNG y comparte vía Share Sheet nativo (`react-native-view-shot` + `expo-sharing`)
+- **Tendencia semanal en Home**: sparkline con las últimas 7 evaluaciones (RECpct) + delta pill (± %) con icono trending-up/down
+- **Recordatorios locales**: `expo-notifications` con trigger `WEEKLY`, hora + días de la semana; permisos gestionados con `ensurePermission` y canal Android dedicado
+- **Recovery curve chart** (react-native-svg) en resultado con líneas de referencia FCr / FCP
+- **BLE auto-reconnect** con backoff exponencial + banner "Reconectando…"
+- **BLE guided flow** con `react-native-ble-plx` (dev build required — no Expo Go)
 - Manual assessment flow (fallback)
 - Single local profile (no login), device_id auto-persisted via AsyncStorage
 - Spanish only, athlete role only
-- In-app result summary (no PDF)
 
 ## Tech Stack
-- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, `react-native-svg`, expo-linear-gradient, safe-area-context, @expo/vector-icons
+- Frontend: Expo Router (SDK 54), React Native, `react-native-ble-plx`, `react-native-svg`, `react-native-view-shot`, `expo-sharing`, `expo-notifications`, `@react-native-community/datetimepicker`, expo-linear-gradient, safe-area-context, @expo/vector-icons
 - Backend: FastAPI + Motor (MongoDB async), Pydantic v2
-- Storage: MongoDB — `profiles`, `assessments` collections
+- Storage: MongoDB — `profiles`, `assessments` collections. AsyncStorage — device_id + reminders
 
 ## Screens
 1. **Onboarding** (`/`) — brand hero + Comenzar CTA + disclaimer

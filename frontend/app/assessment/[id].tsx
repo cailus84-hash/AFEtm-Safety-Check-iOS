@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   Pressable,
   ActivityIndicator,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 import { Assessment, deleteAssessment, getAssessment } from '@/src/lib/api';
 import { RecoveryChart } from '@/src/components/RecoveryChart';
 import {
@@ -42,6 +45,9 @@ export default function AssessmentDetail() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareErr, setShareErr] = useState<string | null>(null);
+  const shareRef = useRef<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -62,6 +68,39 @@ export default function AssessmentDetail() {
       router.replace('/(tabs)/history');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const share = async () => {
+    setShareErr(null);
+    setSharing(true);
+    try {
+      if (Platform.OS === 'web') {
+        setShareErr('La exportación no está disponible en la vista previa web. Prueba en Expo Go o en el build nativo.');
+        return;
+      }
+      if (!shareRef.current) {
+        setShareErr('No se pudo preparar la imagen.');
+        return;
+      }
+      const uri = await captureRef(shareRef, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        setShareErr('Compartir no está disponible en este dispositivo.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Compartir resultado AFE™',
+      });
+    } catch (e: any) {
+      setShareErr(e?.message || 'No se pudo compartir el resultado.');
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -95,70 +134,98 @@ export default function AssessmentDetail() {
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.topTitle}>Resultado</Text>
-        <Pressable
-          onPress={() => setConfirmDel((v) => !v)}
-          testID="detail-delete-toggle"
-          style={styles.iconBtn}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.onSurfaceTertiary} />
-        </Pressable>
+        <View style={{ flexDirection: 'row' }}>
+          <Pressable
+            onPress={share}
+            testID="detail-share-btn"
+            style={styles.iconBtn}
+            disabled={sharing}
+          >
+            {sharing ? (
+              <ActivityIndicator color={colors.brandGold} size="small" />
+            ) : (
+              <MaterialCommunityIcons name="share-variant" size={20} color={colors.brandGold} />
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => setConfirmDel((v) => !v)}
+            testID="detail-delete-toggle"
+            style={styles.iconBtn}
+          >
+            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.onSurfaceTertiary} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
-        {/* Zone banner */}
-        <View
-          style={[
-            styles.banner,
-            { borderColor: color, shadowColor: color },
-          ]}
-          testID="result-zone-banner"
+        {/* Capture region: zone banner + chart bundle → what we export */}
+        <ViewShot
+          ref={shareRef}
+          options={{ format: 'png', quality: 1 }}
+          style={styles.shareRegion}
+          testID="detail-share-region"
         >
-          <LinearGradient
-            colors={[`${color}30`, 'transparent']}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={[styles.bannerIcon, { borderColor: color, shadowColor: color }]}>
-            <MaterialCommunityIcons
-              name={
-                a.zone === 'BLUE' ? 'shield-check'
-                : a.zone === 'GREEN' ? 'chart-line-variant'
-                : a.zone === 'YELLOW' ? 'alert'
-                : 'alert-octagon'
-              }
-              size={28}
-              color={color}
+          {/* Zone banner */}
+          <View
+            style={[
+              styles.banner,
+              { borderColor: color, shadowColor: color },
+            ]}
+            testID="result-zone-banner"
+          >
+            <LinearGradient
+              colors={[`${color}30`, 'transparent']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[styles.bannerIcon, { borderColor: color, shadowColor: color }]}>
+              <MaterialCommunityIcons
+                name={
+                  a.zone === 'BLUE' ? 'shield-check'
+                  : a.zone === 'GREEN' ? 'chart-line-variant'
+                  : a.zone === 'YELLOW' ? 'alert'
+                  : 'alert-octagon'
+                }
+                size={28}
+                color={color}
+              />
+            </View>
+            <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
+            <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone)}</Text>
+            <Text style={styles.bannerDesc}>{zoneDescription(a.zone)}</Text>
+            <View style={styles.bannerRow}>
+              <View style={styles.bannerChip}>
+                <Text style={styles.bannerChipLabel}>PATRÓN</Text>
+                <Text style={styles.bannerChipValue}>{patternLabel(a.pattern)}</Text>
+              </View>
+              <View style={styles.bannerChip}>
+                <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
+                <Text style={styles.bannerChipValue}>{a.action}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.date}>{fmt(a.created_at)}</Text>
+
+          {/* Recovery curve chart */}
+          <Text style={styles.sectionTitle}>Curva de recuperación</Text>
+          <View testID="result-recovery-chart" style={{ alignItems: 'center' }}>
+            <RecoveryChart
+              readings={a.readings}
+              times={[0, 60, 90, 120, 150, 180]}
+              fcr={a.fcr}
+              fcpTarget={a.fcp_target}
+              zoneColor={color}
+              width={Math.min(width - spacing.xl * 2, 360)}
+              height={210}
             />
           </View>
-          <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
-          <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone)}</Text>
-          <Text style={styles.bannerDesc}>{zoneDescription(a.zone)}</Text>
-          <View style={styles.bannerRow}>
-            <View style={styles.bannerChip}>
-              <Text style={styles.bannerChipLabel}>PATRÓN</Text>
-              <Text style={styles.bannerChipValue}>{patternLabel(a.pattern)}</Text>
-            </View>
-            <View style={styles.bannerChip}>
-              <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
-              <Text style={styles.bannerChipValue}>{a.action}</Text>
-            </View>
-          </View>
-        </View>
 
-        <Text style={styles.date}>{fmt(a.created_at)}</Text>
+          <Text style={styles.shareFooter}>AFE™ Safety Check</Text>
+        </ViewShot>
 
-        {/* Recovery curve chart */}
-        <Text style={styles.sectionTitle}>Curva de recuperación</Text>
-        <View testID="result-recovery-chart" style={{ alignItems: 'center' }}>
-          <RecoveryChart
-            readings={a.readings}
-            times={[0, 60, 90, 120, 150, 180]}
-            fcr={a.fcr}
-            fcpTarget={a.fcp_target}
-            zoneColor={color}
-            width={Math.min(width - spacing.xl * 2, 360)}
-            height={210}
-          />
-        </View>
+        {shareErr ? (
+          <Text style={styles.shareErr} testID="detail-share-error">{shareErr}</Text>
+        ) : null}
 
         {/* Metrics grid */}
         <Text style={styles.sectionTitle}>Métricas de recuperación</Text>
@@ -424,6 +491,16 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   disclaimerText: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 15, flex: 1 },
+  shareRegion: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  shareFooter: {
+    color: colors.brandGold, fontSize: 12, letterSpacing: 4, fontWeight: '900',
+    textAlign: 'center', marginTop: spacing.lg,
+  },
+  shareErr: { color: colors.zoneRed, fontSize: 12, fontWeight: '600', marginTop: spacing.sm },
   deleteBox: {
     marginTop: spacing.xl,
     padding: spacing.md,

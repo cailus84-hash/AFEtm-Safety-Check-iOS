@@ -71,6 +71,23 @@ export default function ProfileTab() {
             <Text style={styles.editBtnText}>Editar perfil</Text>
           </Pressable>
 
+          <Pressable
+            testID="profile-reminders-btn"
+            style={[styles.editBtn, { marginTop: spacing.md }]}
+            onPress={() => router.push('/reminders')}
+          >
+            <MaterialCommunityIcons name="bell-ring-outline" size={18} color={colors.brandGold} />
+            <Text style={[styles.editBtnText, { color: colors.brandGold }]}>
+              Recordatorios de chequeo
+            </Text>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={18}
+              color={colors.onSurfaceTertiary}
+              style={{ marginLeft: 'auto' }}
+            />
+          </Pressable>
+
           <View style={[shared.card, { marginTop: spacing.xl }]}>
             <Text style={styles.infoTitle}>Acerca de AFE™ Safety Check</Text>
             <Text style={[shared.body, { marginTop: spacing.sm }]}>

@@ -18,6 +18,7 @@ import {
   getDeviceId,
   listAssessments,
 } from '@/src/lib/api';
+import { TrendSparkline } from '@/src/components/TrendSparkline';
 import {
   colors,
   radius,
@@ -41,8 +42,7 @@ function formatDate(iso: string) {
 export default function Home() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [last, setLast] = useState<Assessment | null>(null);
-  const [count, setCount] = useState(0);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -58,8 +58,7 @@ export default function Home() {
         return;
       }
       setProfile(p);
-      setCount(list.length);
-      setLast(list[0] ?? null);
+      setAssessments(list);
     } catch {
       // silent
     } finally {
@@ -75,6 +74,13 @@ export default function Home() {
   );
 
   const fcpTarget = profile ? Math.round(0.8 * (220 - profile.age)) : 0;
+  const last = assessments[0] ?? null;
+  const count = assessments.length;
+  // Last 7 assessments as chronological trend (oldest → newest)
+  const trendData = [...assessments]
+    .slice(0, 7)
+    .reverse()
+    .map((a) => ({ recpct: a.recpct, zone: a.zone }));
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="home-screen">
@@ -156,6 +162,57 @@ export default function Home() {
               <StatCard label="FCP OBJETIVO" value={`${fcpTarget}`} unit="bpm" />
               <StatCard label="EVALUACIONES" value={`${count}`} unit="" />
               <StatCard label="EDAD" value={`${profile?.age ?? '—'}`} unit="años" />
+            </View>
+
+            {/* Weekly trend */}
+            <View style={[shared.card, { marginTop: spacing.xl }]} testID="home-trend-card">
+              <View style={styles.trendHead}>
+                <View>
+                  <Text style={styles.infoTitle}>Tendencia semanal</Text>
+                  <Text style={[shared.muted, { marginTop: 2 }]}>
+                    Recuperación (RECpct) — últimas {trendData.length || 7} evaluaciones
+                  </Text>
+                </View>
+                {trendData.length >= 2 && (
+                  <View style={styles.trendDelta}>
+                    <MaterialCommunityIcons
+                      name={
+                        trendData[trendData.length - 1].recpct >= trendData[0].recpct
+                          ? 'trending-up'
+                          : 'trending-down'
+                      }
+                      size={16}
+                      color={
+                        trendData[trendData.length - 1].recpct >= trendData[0].recpct
+                          ? colors.zoneGreen
+                          : colors.zoneRed
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.trendDeltaText,
+                        {
+                          color:
+                            trendData[trendData.length - 1].recpct >= trendData[0].recpct
+                              ? colors.zoneGreen
+                              : colors.zoneRed,
+                        },
+                      ]}
+                    >
+                      {(trendData[trendData.length - 1].recpct - trendData[0].recpct).toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {trendData.length === 0 ? (
+                <Text style={[shared.muted, { textAlign: 'center', paddingVertical: spacing.lg }]}>
+                  Realiza más chequeos para ver tu tendencia.
+                </Text>
+              ) : (
+                <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
+                  <TrendSparkline data={trendData} width={320} height={88} />
+                </View>
+              )}
             </View>
 
             {/* Info block */}
@@ -322,6 +379,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     letterSpacing: 0.3,
   },
+  trendHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
+  trendDelta: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: '#141310',
+  },
+  trendDeltaText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   infoRow: {
     flexDirection: 'row',
     gap: spacing.md,
