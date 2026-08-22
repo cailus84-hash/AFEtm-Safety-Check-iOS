@@ -1,0 +1,39 @@
+{
+  "summary": "VERIFICATION-ONLY iteration (no code changed). Made ONE direct httpx.post from the container to https://pulso-activo--cailus84.replit.app/api/assessments using the exact AUTHORITATIVE_UPSTREAM_TOKEN from /app/backend/.env (starts 'YI94rvQfy', len=64) with Authorization: Bearer <token> + Content-Type: application/json + the mandated body {fcr:60, age:30, readings:{0:152,60:118,90:108,120:102,150:96,180:92}, fcpv:{sleep:0,hydration:0,symptoms:0,recent_illness:0,subjective_load:0}}. Upstream responded HTTP 401 application/json; charset=utf-8 with verbatim body {\"message\":\"Unauthorized\"} (Content-Length: 26). Headers observed: server=Google Frontend, x-powered-by=Express, via=1.1 google, plus a GAESA set-cookie (Google App Engine session affinity, not an auth cookie). No JSON error code, no www-authenticate header, no rate-limit header — the upstream simply rejects the Bearer credential outright. Secondary check: proxy at localhost:8001/api/assessments (with required device_id field added) correctly propagated as HTTP 424 with envelope {detail:{code:'AUTHORITATIVE_UPSTREAM_ERROR', message:<Spanish>, upstream_url:'https://pulso-activo--cailus84.replit.app/api/assessments', upstream_status:401, upstream_body:'{\"message\":\"Unauthorized\"}'}}, Content-Type application/json. MongoDB verified: 0 records for device_id=TEST_verify_iter8 → NO write occurred on the 424 path, no fallback executed. git status confirms server.py, api.ts and all other source files are UNCHANGED. Answers to the 7 questions: (1) HTTP status = 401. (2) Bearer auth succeeded = NO. (3) Athlete authorization = N/A (never reached — auth failed first). (4) Contextual interview validation = N/A (never reached). (5) Real JSON response verbatim = {\"message\":\"Unauthorized\"}. (6) Final AFEtm zone = N/A because the upstream request failed with 401. (7) calc_source is 'authoritative' = NO (no assessment was computed or persisted; proxy returned 424 instead, no DB record was written). CONCLUSION: the token stored in /app/backend/.env is rejected by the Replit upstream. Prior iterations (6, 7) established the same evidence; iteration 8 re-attests it with a live probe and confirms the local proxy contract is intact. This is a CREDENTIAL / UPSTREAM CONFIG issue on the Replit side — not a code defect in this repo.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST https://pulso-activo--cailus84.replit.app/api/assessments",
+        "issue": "Upstream returns HTTP 401 {\"message\":\"Unauthorized\"} for the configured AUTHORITATIVE_UPSTREAM_TOKEN (prefix 'YI94rvQfy', len=64). Bearer authentication is rejected at the edge before any athlete/interview validation runs. No X-RateLimit, no WWW-Authenticate, no error code — only a generic Express 401. Token is either invalid, revoked, tenant-mismatched, or the Replit deployment is expecting a different auth scheme (e.g. session cookie / API key header instead of Bearer). Cannot be fixed from this repo; requires the upstream owner to (a) issue a fresh valid token OR (b) whitelist this token OR (c) document the actual expected auth mechanism.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_8.json"
+  ],
+  "action_items": [
+    "Obtain a valid AUTHORITATIVE_UPSTREAM_TOKEN from the Replit upstream owner (or confirm the expected auth scheme — the current Bearer flow yields 401 with no diagnostic hint). Update /app/backend/.env and restart backend. No code change is required in server.py or api.ts — the 424 envelope contract is already correct."
+  ],
+  "critical_code_review_comments": [
+    "No code was reviewed or modified in this iteration — verification pass only.",
+    "git status confirms backend/server.py, frontend/**/api.ts and all source files are unchanged since iteration 7. Only untracked files: backend/.env, frontend/.env, frontend/yarn.lock (all pre-existing, none touched by this run)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "Verification objective 100% met (upstream probe + proxy propagation + DB no-write all confirmed). Business objective 0% — upstream auth still fails.",
+    "frontend": "not tested (backend-only iteration)"
+  },
+  "seed_data_creation": "One transient proxy call with device_id=TEST_verify_iter8 confirmed 424 returned without any MongoDB write (assessments collection query returned 0 documents matching that device_id). Nothing to clean up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 8 is a witness/attestation pass per user directive — no fix attempted. The evidence gathered (verbatim upstream 401 body {\"message\":\"Unauthorized\"}, response headers including x-powered-by:Express + server:Google Frontend + GAESA cookie) is now on record. Next iteration should NOT re-probe unless the AUTHORITATIVE_UPSTREAM_TOKEN in /app/backend/.env changes value. To detect a token rotation, compare the first 9 chars of the .env token against 'YI94rvQfy' — if different, re-run the probe script logic (POST target + exact payload documented in this report). The proxy 424 envelope contract is stable and covered by /app/backend/tests/test_afetm_ingress_424.py (12/12 passing per iteration 7).",
+  "rca_of_issue": "Root cause of upstream 401: the Bearer token 'YI94rvQfy...' (64 chars) stored in /app/backend/.env is not accepted by https://pulso-activo--cailus84.replit.app. Observed evidence: single POST returned HTTP 401 application/json body {\"message\":\"Unauthorized\"} with Content-Length 26, response headers x-powered-by:Express + server:Google Frontend + via:1.1 google + set-cookie GAESA (GAE session affinity, unrelated to auth). No WWW-Authenticate, no error code, no rate-limit hints — Express default 401 from a middleware that only checks token equality/signature. Reproduction: `python /tmp/verify_upstream.py` (script re-creatable from this report; also documented in agent transcript). Mitigation is OUTSIDE this repo's control: (1) rotate the token via the Replit deployment owner, (2) or fetch the correct auth scheme docs if it is not Bearer, (3) or coordinate a shared-secret refresh. Meanwhile the local backend correctly refuses to fabricate AFE results and returns HTTP 424 with the full upstream body preserved — the mobile client will render the Spanish error banner per api.ts detail.code === 'AUTHORITATIVE_UPSTREAM_ERROR' gate."
+}
