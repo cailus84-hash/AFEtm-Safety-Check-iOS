@@ -19,6 +19,7 @@ import {
   listAssessments,
 } from '@/src/lib/api';
 import { TrendSparkline } from '@/src/components/TrendSparkline';
+import { ColorGuideCard } from '@/src/components/ColorGuideCard';
 import {
   colors,
   radius,
@@ -254,6 +255,11 @@ export default function Home() {
               <InfoRow n="2" text="Alcanza la FCP objetivo con un esfuerzo controlado." />
               <InfoRow n="3" text="Registra tu FC durante 3 minutos de recuperación." />
               <InfoRow n="4" text="Recibe tu zona AFE y acción preventiva sugerida." />
+            </View>
+
+            {/* Official AFEtm color guide */}
+            <View style={{ marginTop: spacing.xl }}>
+              <ColorGuideCard />
             </View>
 
             {/* Disclaimer */}
