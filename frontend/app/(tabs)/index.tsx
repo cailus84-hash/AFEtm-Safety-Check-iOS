@@ -26,22 +26,17 @@ import {
   shared,
   spacing,
   zoneColor,
-  zoneLabel,
-  zoneDescription,
-  patternLabel,
 } from '@/src/lib/theme';
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }) + ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-}
+import {
+  useI18n,
+  zoneLabelI18n,
+  zoneDescI18n,
+  patternLabelI18n,
+} from '@/src/lib/i18n';
 
 export default function Home() {
   const router = useRouter();
+  const { t, formatDateTime } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,8 +72,6 @@ export default function Home() {
   const fcpTarget = profile ? Math.round(0.8 * (220 - profile.age)) : 0;
   const last = assessments[0] ?? null;
   const count = assessments.length;
-  // Last 7 assessments as chronological trend (oldest → newest).
-  // Only include AUTHORITATIVE results — trend must not display invented zones.
   const trendData = [...assessments]
     .filter((a) => a.zone !== null && a.zone !== undefined)
     .slice(0, 7)
@@ -103,12 +96,14 @@ export default function Home() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>AFE™ SAFETY CHECK</Text>
-            <Text style={shared.h2}>Hola{profile ? `, ${profile.name.split(' ')[0]}` : ''}</Text>
+            <Text style={styles.eyebrow}>{t('home.eyebrow')}</Text>
+            <Text style={shared.h2}>
+              {t('home.greeting')}{profile ? `, ${profile.name.split(' ')[0]}` : ''}
+            </Text>
           </View>
           <View style={styles.badge}>
             <MaterialCommunityIcons name="shield-check" size={16} color={colors.brandGold} />
-            <Text style={styles.badgeText}>PREVENTIVO</Text>
+            <Text style={styles.badgeText}>{t('home.badge')}</Text>
           </View>
         </View>
 
@@ -118,7 +113,6 @@ export default function Home() {
           </View>
         ) : (
           <>
-            {/* Last check hero */}
             {last ? (
               last.zone ? (
                 <Pressable
@@ -132,16 +126,19 @@ export default function Home() {
                     },
                   ]}
                 >
-                  <Text style={styles.heroLabel}>Última evaluación</Text>
+                  <Text style={styles.heroLabel}>{t('home.lastEval')}</Text>
                   <Text style={[styles.zoneName, { color: zoneColor(last.zone) }]}>
-                    {zoneLabel(last.zone)}
+                    {zoneLabelI18n(t, last.zone)}
                   </Text>
-                  <Text style={styles.heroDesc}>{zoneDescription(last.zone)}</Text>
+                  <Text style={styles.heroDesc}>{zoneDescI18n(t, last.zone)}</Text>
 
                   <View style={styles.heroMetaRow}>
-                    <MetaChip icon="clock-outline" label={formatDate(last.created_at)} />
+                    <MetaChip icon="clock-outline" label={formatDateTime(last.created_at)} />
                     {last.pattern ? (
-                      <MetaChip icon="pulse" label={`Patrón ${patternLabel(last.pattern)}`} />
+                      <MetaChip
+                        icon="pulse"
+                        label={t('home.meta.pattern', { name: patternLabelI18n(t, last.pattern) })}
+                      />
                     ) : null}
                   </View>
                 </Pressable>
@@ -158,17 +155,14 @@ export default function Home() {
                     },
                   ]}
                 >
-                  <Text style={styles.heroLabel}>Última evaluación</Text>
+                  <Text style={styles.heroLabel}>{t('home.lastEval')}</Text>
                   <Text style={[styles.zoneName, { color: colors.brandGold }]}>
-                    Pendiente
+                    {t('home.pending.title')}
                   </Text>
-                  <Text style={styles.heroDesc}>
-                    Resultado pendiente de sincronización con el motor oficial
-                    AFEtm. Toca para reintentar.
-                  </Text>
+                  <Text style={styles.heroDesc}>{t('home.pending.desc')}</Text>
                   <View style={styles.heroMetaRow}>
-                    <MetaChip icon="clock-outline" label={formatDate(last.created_at)} />
-                    <MetaChip icon="cloud-sync-outline" label="Sin clasificar" />
+                    <MetaChip icon="clock-outline" label={formatDateTime(last.created_at)} />
+                    <MetaChip icon="cloud-sync-outline" label={t('common.unclassified')} />
                   </View>
                 </Pressable>
               )
@@ -180,30 +174,25 @@ export default function Home() {
                   color={colors.brandGold}
                   style={{ alignSelf: 'center', marginBottom: spacing.md }}
                 />
-                <Text style={[shared.h3, { textAlign: 'center' }]}>
-                  Sin evaluaciones previas
-                </Text>
+                <Text style={[shared.h3, { textAlign: 'center' }]}>{t('home.emptyTitle')}</Text>
                 <Text style={[shared.body, { textAlign: 'center', marginTop: spacing.sm }]}>
-                  Realiza tu primer Safety Check para conocer tu estado actual
-                  de recuperación cardiovascular.
+                  {t('home.emptyBody')}
                 </Text>
               </View>
             )}
 
-            {/* Quick stats */}
             <View style={styles.statsRow}>
-              <StatCard label="FCP OBJETIVO" value={`${fcpTarget}`} unit="bpm" />
-              <StatCard label="EVALUACIONES" value={`${count}`} unit="" />
-              <StatCard label="EDAD" value={`${profile?.age ?? '—'}`} unit="años" />
+              <StatCard label={t('home.stats.fcp')} value={`${fcpTarget}`} unit={t('home.stats.fcp.unit')} />
+              <StatCard label={t('home.stats.count')} value={`${count}`} unit="" />
+              <StatCard label={t('home.stats.age')} value={`${profile?.age ?? '—'}`} unit={t('home.stats.age.unit')} />
             </View>
 
-            {/* Weekly trend */}
             <View style={[shared.card, { marginTop: spacing.xl }]} testID="home-trend-card">
               <View style={styles.trendHead}>
                 <View>
-                  <Text style={styles.infoTitle}>Tendencia semanal</Text>
+                  <Text style={styles.infoTitle}>{t('home.trend.title')}</Text>
                   <Text style={[shared.muted, { marginTop: 2 }]}>
-                    Recuperación (RECpct) — últimas {trendData.length || 7} evaluaciones
+                    {t('home.trend.subtitle', { n: trendData.length || 7 })}
                   </Text>
                 </View>
                 {trendData.length >= 2 && (
@@ -239,7 +228,7 @@ export default function Home() {
               </View>
               {trendData.length === 0 ? (
                 <Text style={[shared.muted, { textAlign: 'center', paddingVertical: spacing.lg }]}>
-                  Realiza más chequeos para ver tu tendencia.
+                  {t('home.trend.empty')}
                 </Text>
               ) : (
                 <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
@@ -248,31 +237,25 @@ export default function Home() {
               )}
             </View>
 
-            {/* Info block */}
             <View style={[shared.card, { marginTop: spacing.xl }]}>
-              <Text style={styles.infoTitle}>¿Cómo funciona?</Text>
-              <InfoRow n="1" text="Registra tu Frecuencia Cardiaca en reposo (FCr)." />
-              <InfoRow n="2" text="Alcanza la FCP objetivo con un esfuerzo controlado." />
-              <InfoRow n="3" text="Registra tu FC durante 3 minutos de recuperación." />
-              <InfoRow n="4" text="Recibe tu zona AFE y acción preventiva sugerida." />
+              <Text style={styles.infoTitle}>{t('home.how.title')}</Text>
+              <InfoRow n="1" text={t('home.how.1')} />
+              <InfoRow n="2" text={t('home.how.2')} />
+              <InfoRow n="3" text={t('home.how.3')} />
+              <InfoRow n="4" text={t('home.how.4')} />
             </View>
 
-            {/* Official AFEtm color guide */}
             <View style={{ marginTop: spacing.xl }}>
               <ColorGuideCard />
             </View>
 
-            {/* Disclaimer */}
             <View style={styles.disclaimer}>
               <MaterialCommunityIcons
                 name="information-outline"
                 size={16}
                 color={colors.onSurfaceTertiary}
               />
-              <Text style={styles.disclaimerText}>
-                Herramienta preventiva. No es una aplicación de diagnóstico
-                médico ni sustituye a un profesional de la salud.
-              </Text>
+              <Text style={styles.disclaimerText}>{t('home.disclaimer')}</Text>
             </View>
           </>
         )}
@@ -286,7 +269,7 @@ export default function Home() {
         >
           <MaterialCommunityIcons name="heart-pulse" size={18} color="#000" />
           <Text style={[shared.primaryBtnText, { marginLeft: spacing.sm }]}>
-            Nuevo Safety Check
+            {t('home.newCheck')}
           </Text>
         </Pressable>
       </View>

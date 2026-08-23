@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { createAssessment, fetchProfile, getDeviceId, UpstreamError } from '@/src/lib/api';
+import { useI18n } from '@/src/lib/i18n';
 
 // Capture windows (seconds elapsed since t=0 of recovery)
 // Each window averages the readings during the LAST 5s of the segment
@@ -35,6 +36,7 @@ type Phase =
 
 export default function Guided() {
   const router = useRouter();
+  const { t } = useI18n();
   const hr = useHeartRateMonitor();
   const [phase, setPhase] = useState<Phase>('scan');
   const [profile, setProfile] = useState<{ age: number } | null>(null);
@@ -92,7 +94,7 @@ export default function Guided() {
     // FCr = average of last 15s of readings (rest)
     const avg = hr.averageLastMs(15_000);
     if (!avg || avg < 30 || avg > 130) {
-      setErrorMsg('No se pudo registrar FCr. Mantén la calma y espera unos segundos.');
+      setErrorMsg(t('guided.fcr.error'));
       return;
     }
     setFcr(avg);
@@ -103,7 +105,7 @@ export default function Guided() {
   const markPeakAndStart = useCallback(() => {
     const current = hr.hr;
     if (!current || current < fcpTarget - 15) {
-      setErrorMsg(`Alcanza al menos ~${fcpTarget - 15} bpm antes de iniciar la recuperación.`);
+      setErrorMsg(t('guided.fcp.error', { n: fcpTarget - 15 }));
       return;
     }
     setHrPeak(current);
@@ -184,12 +186,13 @@ export default function Guided() {
       } catch (e: any) {
         if (e instanceof UpstreamError) {
           setErrorMsg(
-            `Servidor autoritativo AFEtm rechazó la solicitud (HTTP ${e.upstream_status}). ` +
-            `Detalle: ${e.upstream_body?.slice(0, 200) || e.message}. ` +
-            `La evaluación NO se guardó.`
+            t('assess.error.upstream', {
+              status: e.upstream_status,
+              body: e.upstream_body?.slice(0, 200) || e.message,
+            })
           );
         } else {
-          setErrorMsg(e?.message || 'No se pudo calcular la evaluación.');
+          setErrorMsg(e?.message || t('assess.error.generic'));
         }
         setPhase('error');
       }
@@ -211,26 +214,26 @@ export default function Guided() {
           <Pressable onPress={back} style={styles.iconBtn} testID="guided-back-btn">
             <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
           </Pressable>
-          <Text style={styles.topTitle}>Guiado con BLE</Text>
+          <Text style={styles.topTitle}>{t('guided.title')}</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={{ padding: spacing.xl, flex: 1, justifyContent: 'center' }}>
           <View style={[shared.card, { alignItems: 'center', gap: spacing.md }]}>
             <MaterialCommunityIcons name="bluetooth-off" size={40} color={colors.zoneYellow} />
             <Text style={[shared.h3, { textAlign: 'center' }]}>
-              BLE no disponible en este entorno
+              {t('guided.unsupported.title')}
             </Text>
             <Text style={[shared.body, { textAlign: 'center' }]}>
               {Platform.OS === 'web'
-                ? 'La vista previa web no soporta Bluetooth Low Energy. Escanea el QR de Expo o genera un build nativo para usar el modo Guiado.'
-                : 'Expo Go no incluye react-native-ble-plx. Genera un build de desarrollo (Publish → Generate iOS/Android build) para probarlo.'}
+                ? t('guided.unsupported.web')
+                : t('guided.unsupported.native')}
             </Text>
             <Pressable
               style={[shared.primaryBtn, { alignSelf: 'stretch', marginTop: spacing.md }]}
               onPress={() => router.replace('/assessment-flow/manual')}
               testID="guided-fallback-manual"
             >
-              <Text style={shared.primaryBtnText}>Usar modo manual</Text>
+              <Text style={shared.primaryBtnText}>{t('guided.unsupported.cta')}</Text>
             </Pressable>
           </View>
         </View>
@@ -245,31 +248,31 @@ export default function Guided() {
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.topTitle}>{phaseLabel(phase)}</Text>
-          <ConnectionPill hr={hr} />
+          <Text style={styles.topTitle}>{phaseLabel(phase, t)}</Text>
+          <ConnectionPill hr={hr} t={t} />
         </View>
         <View style={styles.iconBtn} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
         {/* Live HR banner */}
-        <LiveHrCard hrValue={hr.hr} pulseAnim={pulse} status={hr.status} phase={phase} elapsed={elapsed} />
+        <LiveHrCard hrValue={hr.hr} pulseAnim={pulse} status={hr.status} phase={phase} elapsed={elapsed} t={t} />
 
         {/* Phase-specific body */}
         {phase === 'scan' && (
-          <ScanPhase hr={hr} onSelect={(id) => { setPhase('connect'); hr.connect(id); }} />
+          <ScanPhase hr={hr} onSelect={(id) => { setPhase('connect'); hr.connect(id); }} t={t} />
         )}
         {phase === 'connect' && (
-          <InfoBlock icon="progress-clock" title="Conectando…" text="Estableciendo conexión con el pulsómetro." />
+          <InfoBlock icon="progress-clock" title={t('guided.connecting.title')} text={t('guided.connecting.body')} />
         )}
         {hr.status === 'connected' && (phase === 'connect' || phase === 'scan') && (
-          <ReadyPrompt onStart={() => setPhase('fcr')} />
+          <ReadyPrompt onStart={() => setPhase('fcr')} t={t} />
         )}
         {phase === 'fcr' && (
-          <FcrPhase hrValue={hr.hr} onRegister={registerFcr} />
+          <FcrPhase hrValue={hr.hr} onRegister={registerFcr} t={t} />
         )}
         {phase === 'fcp' && (
-          <FcpPhase fcpTarget={fcpTarget} hrValue={hr.hr} fcr={fcr!} onStart={markPeakAndStart} />
+          <FcpPhase fcpTarget={fcpTarget} hrValue={hr.hr} fcr={fcr!} onStart={markPeakAndStart} t={t} />
         )}
         {phase === 'recovery' && (
           <>
@@ -277,36 +280,31 @@ export default function Guided() {
               <View style={styles.reconnectBanner} testID="guided-reconnect-banner">
                 <ActivityIndicator color={colors.zoneYellow} size="small" />
                 <Text style={styles.reconnectText}>
-                  Reconectando con el pulsómetro… El cronómetro sigue activo. Intento {hr.reconnectAttempt}.
+                  {t('guided.reconnect', { n: hr.reconnectAttempt })}
                 </Text>
               </View>
             )}
-            <RecoveryPhase elapsed={elapsed} captured={captured} hrPeak={hrPeak} fcr={fcr!} />
+            <RecoveryPhase elapsed={elapsed} captured={captured} hrPeak={hrPeak} fcr={fcr!} t={t} />
           </>
         )}
         {phase === 'submit' && (
           <View style={[shared.card, { alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }]}>
             <ActivityIndicator color={colors.brandGold} size="large" />
-            <Text style={shared.h3}>Calculando resultado…</Text>
-            <Text style={[shared.body, { textAlign: 'center' }]}>
-              Estamos analizando tu curva de recuperación.
-            </Text>
+            <Text style={shared.h3}>{t('guided.submit.title')}</Text>
+            <Text style={[shared.body, { textAlign: 'center' }]}>{t('guided.submit.body')}</Text>
           </View>
         )}
         {phase === 'error' && (
           <View style={[shared.card, { marginTop: spacing.xl }]}>
-            <Text style={[shared.h3, { color: colors.zoneRed }]}>Error</Text>
+            <Text style={[shared.h3, { color: colors.zoneRed }]}>{t('guided.error.title')}</Text>
             <Text style={[shared.body, { marginTop: spacing.sm }]}>
-              {errorMsg || 'Ocurrió un problema. Intenta de nuevo.'}
+              {errorMsg || t('guided.error.default')}
             </Text>
             <Pressable
               style={[shared.primaryBtn, { marginTop: spacing.md }]}
-              onPress={() => {
-                setErrorMsg(null);
-                setPhase('scan');
-              }}
+              onPress={() => { setErrorMsg(null); setPhase('scan'); }}
             >
-              <Text style={shared.primaryBtnText}>Reintentar</Text>
+              <Text style={shared.primaryBtnText}>{t('guided.error.retry')}</Text>
             </Pressable>
           </View>
         )}
@@ -318,12 +316,10 @@ export default function Guided() {
         {/* No-permission fallback */}
         {hr.status === 'no-permission' && (
           <View style={[shared.card, { marginTop: spacing.xl }]}>
-            <Text style={shared.h3}>Permisos requeridos</Text>
-            <Text style={[shared.body, { marginTop: spacing.sm }]}>
-              Concede acceso a Bluetooth para poder detectar tu pulsómetro.
-            </Text>
+            <Text style={shared.h3}>{t('guided.perm.title')}</Text>
+            <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('guided.perm.body')}</Text>
             <Pressable style={[shared.primaryBtn, { marginTop: spacing.md }]} onPress={hr.startScan}>
-              <Text style={shared.primaryBtnText}>Reintentar permisos</Text>
+              <Text style={shared.primaryBtnText}>{t('guided.perm.retry')}</Text>
             </Pressable>
           </View>
         )}
@@ -332,38 +328,38 @@ export default function Guided() {
   );
 }
 
-function phaseLabel(p: Phase) {
+function phaseLabel(p: Phase, t: (k: any) => string) {
   switch (p) {
     case 'scan':
-      return 'Buscando pulsómetro';
+      return t('guided.phase.scan');
     case 'connect':
-      return 'Conectando';
+      return t('guided.phase.connect');
     case 'ready':
-      return 'Listo';
+      return t('guided.phase.ready');
     case 'fcr':
-      return 'Registrar FCr';
+      return t('guided.phase.fcr');
     case 'fcp':
-      return 'Alcanzar FCP';
+      return t('guided.phase.fcp');
     case 'recovery':
-      return 'Recuperación 3 min';
+      return t('guided.phase.recovery');
     case 'submit':
-      return 'Calculando';
+      return t('guided.phase.submit');
     case 'error':
-      return 'Error';
+      return t('guided.phase.error');
   }
 }
 
 // ---------------- Sub-components ----------------
 
-function ConnectionPill({ hr }: { hr: ReturnType<typeof useHeartRateMonitor> }) {
+function ConnectionPill({ hr, t }: { hr: ReturnType<typeof useHeartRateMonitor>; t: any }) {
   const reconnecting = hr.isReconnecting;
   const dotColor = reconnecting ? colors.zoneYellow
     : hr.status === 'connected' ? colors.zoneGreen
     : hr.status === 'scanning' || hr.status === 'connecting' ? colors.zoneYellow
     : colors.onSurfaceTertiary;
   const label = reconnecting
-    ? `Reconectando… (${hr.reconnectAttempt})`
-    : hr.connectedDevice?.name ?? (hr.status === 'scanning' ? 'Escaneando…' : 'Sin conexión');
+    ? t('guided.pill.reconnecting', { n: hr.reconnectAttempt })
+    : hr.connectedDevice?.name ?? (hr.status === 'scanning' ? t('guided.pill.scanning') : t('guided.pill.disconnected'));
   return (
     <View style={styles.connRow} testID="guided-connection-pill">
       <View style={[styles.connDot, { backgroundColor: dotColor, shadowColor: dotColor }]} />
@@ -373,20 +369,21 @@ function ConnectionPill({ hr }: { hr: ReturnType<typeof useHeartRateMonitor> }) 
 }
 
 function LiveHrCard({
-  hrValue, pulseAnim, status, phase, elapsed,
+  hrValue, pulseAnim, status, phase, elapsed, t,
 }: {
   hrValue: number | null;
   pulseAnim: Animated.Value;
   status: any;
   phase: Phase;
   elapsed: number;
+  t: any;
 }) {
   const scale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
   const opacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
   return (
     <View style={styles.liveCard} testID="guided-live-hr">
       <View style={styles.liveTop}>
-        <Text style={styles.liveLabel}>FRECUENCIA EN VIVO</Text>
+        <Text style={styles.liveLabel}>{t('guided.live.label')}</Text>
         {phase === 'recovery' ? (
           <Text style={styles.timer} testID="guided-timer">
             {String(Math.floor(elapsed / 60)).padStart(2, '0')}:
@@ -404,41 +401,34 @@ function LiveHrCard({
         </View>
       </View>
       <Text style={styles.liveHint}>
-        {status === 'connected'
-          ? 'Señal activa desde el pulsómetro.'
-          : 'Esperando señal del pulsómetro…'}
+        {status === 'connected' ? t('guided.live.active') : t('guided.live.idle')}
       </Text>
     </View>
   );
 }
 
-function ScanPhase({
-  hr, onSelect,
-}: {
+function ScanPhase({ hr, onSelect, t }: {
   hr: ReturnType<typeof useHeartRateMonitor>;
   onSelect: (id: string) => void;
+  t: any;
 }) {
   return (
     <View style={{ marginTop: spacing.xl }}>
       <View style={styles.scanHeader}>
-        <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
+        <Text style={styles.sectionTitle}>{t('guided.devices')}</Text>
         <Pressable onPress={hr.startScan} testID="guided-rescan-btn" style={styles.rescan}>
           <MaterialCommunityIcons name="refresh" size={14} color={colors.brandGold} />
-          <Text style={styles.rescanText}>Buscar</Text>
+          <Text style={styles.rescanText}>{t('guided.scan')}</Text>
         </Pressable>
       </View>
       {hr.status === 'scanning' && (
         <View style={styles.scanning}>
           <ActivityIndicator color={colors.brandGold} />
-          <Text style={[shared.muted, { marginTop: spacing.sm }]}>
-            Buscando pulsómetros compatibles (perfil HR 0x180D)…
-          </Text>
+          <Text style={[shared.muted, { marginTop: spacing.sm }]}>{t('guided.scanning')}</Text>
         </View>
       )}
       {hr.devices.length === 0 && hr.status !== 'scanning' && (
-        <Text style={[shared.muted, { marginTop: spacing.md }]}>
-          No se encontraron pulsómetros. Asegúrate de que esté encendido y en modo emparejamiento.
-        </Text>
+        <Text style={[shared.muted, { marginTop: spacing.md }]}>{t('guided.no.devices')}</Text>
       )}
       <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
         {hr.devices.map((d) => (
@@ -463,57 +453,47 @@ function ScanPhase({
   );
 }
 
-function ReadyPrompt({ onStart }: { onStart: () => void }) {
+function ReadyPrompt({ onStart, t }: { onStart: () => void; t: any }) {
   return (
     <View style={[shared.card, { marginTop: spacing.xl }]} testID="guided-ready">
-      <Text style={shared.h3}>Pulsómetro conectado</Text>
-      <Text style={[shared.body, { marginTop: spacing.sm }]}>
-        Ponte cómodo y en calma. En el siguiente paso registraremos tu
-        Frecuencia Cardiaca en Reposo (FCr).
-      </Text>
+      <Text style={shared.h3}>{t('guided.ready.title')}</Text>
+      <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('guided.ready.body')}</Text>
       <Pressable style={[shared.primaryBtn, { marginTop: spacing.md }]} onPress={onStart} testID="guided-start-fcr">
-        <Text style={shared.primaryBtnText}>Continuar</Text>
+        <Text style={shared.primaryBtnText}>{t('common.continue')}</Text>
       </Pressable>
     </View>
   );
 }
 
-function FcrPhase({ hrValue, onRegister }: { hrValue: number | null; onRegister: () => void }) {
+function FcrPhase({ hrValue, onRegister, t }: { hrValue: number | null; onRegister: () => void; t: any }) {
   return (
     <View style={[shared.card, { marginTop: spacing.xl }]} testID="phase-fcr">
-      <Text style={shared.h3}>Registra tu FCr</Text>
-      <Text style={[shared.body, { marginTop: spacing.sm }]}>
-        Siéntate y respira con calma durante ~1 minuto. Cuando tu FC en
-        vivo esté estable, presiona <Text style={{ color: colors.brandGold, fontWeight: '800' }}>Registrar</Text>.
-        Promediaremos los últimos 15 s automáticamente.
-      </Text>
+      <Text style={shared.h3}>{t('guided.fcr.title')}</Text>
+      <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('guided.fcr.body')}</Text>
       <Pressable
         testID="guided-register-fcr"
         style={[shared.primaryBtn, { marginTop: spacing.md, opacity: hrValue ? 1 : 0.5 }]}
         onPress={onRegister}
         disabled={!hrValue}
       >
-        <Text style={shared.primaryBtnText}>Registrar FCr</Text>
+        <Text style={shared.primaryBtnText}>{t('guided.fcr.register')}</Text>
       </Pressable>
     </View>
   );
 }
 
-function FcpPhase({ fcpTarget, hrValue, fcr, onStart }: {
-  fcpTarget: number; hrValue: number | null; fcr: number; onStart: () => void;
+function FcpPhase({ fcpTarget, hrValue, fcr, onStart, t }: {
+  fcpTarget: number; hrValue: number | null; fcr: number; onStart: () => void; t: any;
 }) {
   const reached = !!hrValue && hrValue >= fcpTarget;
   return (
     <View style={[shared.card, { marginTop: spacing.xl }]} testID="phase-fcp">
-      <Text style={shared.h3}>Alcanza tu FCP objetivo</Text>
-      <Text style={[shared.body, { marginTop: spacing.sm }]}>
-        Realiza un esfuerzo controlado hasta acercarte a la meta. Cuando la
-        alcances, detén el esfuerzo y presiona <Text style={{ color: colors.brandGold, fontWeight: '800' }}>Iniciar recuperación</Text>.
-      </Text>
+      <Text style={shared.h3}>{t('guided.fcp.title')}</Text>
+      <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('guided.fcp.body')}</Text>
       <View style={styles.fcpBadges}>
-        <FcpBadge label="FCr" value={`${fcr}`} color={colors.onSurfaceSecondary} />
-        <FcpBadge label="FCP OBJETIVO" value={`${fcpTarget}`} color={colors.brandGold} />
-        <FcpBadge label="EN VIVO" value={hrValue ? `${hrValue}` : '—'} color={reached ? colors.zoneGreen : colors.onSurface} />
+        <FcpBadge label={t('guided.fcp.rhr')} value={`${fcr}`} color={colors.onSurfaceSecondary} />
+        <FcpBadge label={t('guided.fcp.target')} value={`${fcpTarget}`} color={colors.brandGold} />
+        <FcpBadge label={t('guided.fcp.live')} value={hrValue ? `${hrValue}` : '—'} color={reached ? colors.zoneGreen : colors.onSurface} />
       </View>
       <Pressable
         testID="guided-start-recovery"
@@ -521,7 +501,7 @@ function FcpPhase({ fcpTarget, hrValue, fcr, onStart }: {
         onPress={onStart}
         disabled={!hrValue}
       >
-        <Text style={shared.primaryBtnText}>Iniciar recuperación</Text>
+        <Text style={shared.primaryBtnText}>{t('guided.fcp.start')}</Text>
       </Pressable>
     </View>
   );
@@ -536,8 +516,8 @@ function FcpBadge({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function RecoveryPhase({ elapsed, captured, hrPeak, fcr }: {
-  elapsed: number; captured: Record<string, number>; hrPeak: number | null; fcr: number;
+function RecoveryPhase({ elapsed, captured, hrPeak, fcr, t }: {
+  elapsed: number; captured: Record<string, number>; hrPeak: number | null; fcr: number; t: any;
 }) {
   const progress = Math.min(1, elapsed / RECOVERY_DURATION);
   return (
@@ -549,23 +529,23 @@ function RecoveryPhase({ elapsed, captured, hrPeak, fcr }: {
         {elapsed}s / {RECOVERY_DURATION}s
       </Text>
 
-      <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>CAPTURAS AUTOMÁTICAS</Text>
+      <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>{t('guided.recovery.captures')}</Text>
       <Text style={[shared.muted, { marginBottom: spacing.md }]}>
-        Cada checkpoint promedia los últimos 5 s para eliminar ruido de señal.
+        {t('guided.recovery.captures.hint')}
       </Text>
       <View style={styles.captureGrid}>
-        <CaptureBox label="FCr" value={fcr} status="done" />
-        <CaptureBox label="t=0s (Pico)" value={hrPeak ?? 0} status="done" />
-        {CAPTURE_TIMES.map((t) => {
-          const key = String(t);
+        <CaptureBox label={t('guided.fcp.rhr')} value={fcr} status="done" />
+        <CaptureBox label={t('guided.recovery.peak')} value={hrPeak ?? 0} status="done" />
+        {CAPTURE_TIMES.map((tm) => {
+          const key = String(tm);
           const val = captured[key];
           const status: 'pending' | 'active' | 'done' =
-            val != null ? 'done' : elapsed >= t - 5 && elapsed < t ? 'active' : elapsed < t ? 'pending' : 'done';
+            val != null ? 'done' : elapsed >= tm - 5 && elapsed < tm ? 'active' : elapsed < tm ? 'pending' : 'done';
           return (
             <CaptureBox
               key={key}
-              testID={`capture-${t}`}
-              label={`t=${t}s`}
+              testID={`capture-${tm}`}
+              label={`t=${tm}s`}
               value={val ?? 0}
               status={status}
             />

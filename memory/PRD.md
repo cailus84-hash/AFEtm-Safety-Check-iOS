@@ -4,7 +4,22 @@
 AFEtm Safety Check is a preventive cardiovascular recovery assessment app for athletes.
 **Not a medical diagnostic tool.** Supports responsible decisions before continuing physical activity.
 
-Tagline: *Antes de entrenar. Antes de competir. Antes de exigir más.*
+Tagline (EN default): *Before Training. Before Competition. Before Pushing Harder.*
+Tagline (ES): *Antes de entrenar. Antes de competir. Antes de exigir más.*
+
+## Scope (v8 — i18n + branding)
+- **Strict bilingual UX (EN default, ES toggle)**. Full dictionary lives in
+  `/app/frontend/src/lib/i18n.tsx`. On first launch the app detects the device
+  locale (via `expo-localization`) and defaults to English if not Spanish. The
+  choice persists in AsyncStorage (`afetm.lang`).
+- **Language switcher** available in two places:
+  - Onboarding: top-right pill (`onboarding-lang-toggle`) that toggles between EN/ES.
+  - Profile tab: dedicated card with two flag buttons (`profile-lang-en`, `profile-lang-es`).
+- **Localized helpers**: `zoneLabelI18n`, `zoneShortI18n`, `zoneDescI18n`,
+  `patternLabelI18n`, and locale-aware `formatDate/formatTime/formatDateTime`.
+- **Official AFEtm presentation image** (`/app/frontend/assets/images/afetm-hero.png`)
+  is rendered on the onboarding screen with a gold-glow frame and
+  "OFFICIAL VISUAL GUIDE" / "GUÍA VISUAL OFICIAL" badge.
 
 ## Scope (v7 — strict authoritative propagation)
 - Backend uses HTTP **424 Failed Dependency** (not 502 — the K8s/Cloudflare ingress rewrites 502 into HTML) to surface authoritative-upstream failures with the exact `{code:'AUTHORITATIVE_UPSTREAM_ERROR', upstream_status, upstream_body, upstream_url}` envelope.

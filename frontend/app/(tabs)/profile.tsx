@@ -12,9 +12,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Profile, fetchProfile, getDeviceId } from '@/src/lib/api';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
+import { useI18n, Lang } from '@/src/lib/i18n';
 
 export default function ProfileTab() {
   const router = useRouter();
+  const { t, lang, setLang } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,8 +37,8 @@ export default function ProfileTab() {
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="profile-tab-screen">
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>ATLETA</Text>
-        <Text style={shared.h2}>Perfil</Text>
+        <Text style={styles.eyebrow}>{t('profile.eyebrow')}</Text>
+        <Text style={shared.h2}>{t('profile.title')}</Text>
       </View>
 
       {loading ? (
@@ -76,16 +78,16 @@ export default function ProfileTab() {
                     { color: profile.target_zone === 'BLUE' ? colors.zoneBlue : colors.zoneGreen },
                   ]}
                 >
-                  Objetivo: {profile.target_zone === 'BLUE' ? 'Zona Azul' : 'Zona Verde'}
+                  {profile.target_zone === 'BLUE' ? t('profile.target.blue') : t('profile.target.green')}
                 </Text>
               </View>
             ) : null}
           </View>
 
           <View style={styles.statsGrid}>
-            <Stat label="EDAD" value={`${profile.age}`} unit="años" />
-            <Stat label="PESO" value={`${profile.weight}`} unit="kg" />
-            <Stat label="FCP OBJETIVO" value={`${fcp}`} unit="bpm" />
+            <Stat label={t('profile.stat.age')} value={`${profile.age}`} unit={t('profile.stat.age.unit')} />
+            <Stat label={t('profile.stat.weight')} value={`${profile.weight}`} unit={t('profile.stat.weight.unit')} />
+            <Stat label={t('profile.stat.fcp')} value={`${fcp}`} unit={t('profile.stat.fcp.unit')} />
           </View>
 
           <Pressable
@@ -94,7 +96,7 @@ export default function ProfileTab() {
             onPress={() => router.push('/profile-setup')}
           >
             <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.onSurface} />
-            <Text style={styles.editBtnText}>Editar perfil</Text>
+            <Text style={styles.editBtnText}>{t('profile.edit')}</Text>
           </Pressable>
 
           <Pressable
@@ -104,7 +106,7 @@ export default function ProfileTab() {
           >
             <MaterialCommunityIcons name="bell-ring-outline" size={18} color={colors.brandGold} />
             <Text style={[styles.editBtnText, { color: colors.brandGold }]}>
-              Recordatorios de chequeo
+              {t('profile.reminders')}
             </Text>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -114,26 +116,68 @@ export default function ProfileTab() {
             />
           </Pressable>
 
+          {/* Language switcher */}
+          <View style={[shared.card, { marginTop: spacing.xl }]} testID="profile-language-card">
+            <View style={styles.langHead}>
+              <MaterialCommunityIcons name="translate" size={16} color={colors.brandGold} />
+              <Text style={styles.langSection}>{t('profile.language.section')}</Text>
+            </View>
+            <View style={styles.langRow}>
+              {(['en', 'es'] as Lang[]).map((code) => {
+                const active = lang === code;
+                return (
+                  <Pressable
+                    key={code}
+                    testID={`profile-lang-${code}`}
+                    onPress={() => setLang(code)}
+                    style={[
+                      styles.langBtn,
+                      active && {
+                        borderColor: colors.brandGold,
+                        backgroundColor: '#1F1B10',
+                        shadowColor: colors.brandGold,
+                        shadowOpacity: 0.5,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: 0 },
+                        elevation: 4,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.flag, active && { color: colors.brandGold }]}>
+                      {code === 'en' ? '🇬🇧' : '🇪🇸'}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.langLabel, active && { color: colors.brandGold }]}>
+                        {code === 'en' ? t('profile.language.en') : t('profile.language.es')}
+                      </Text>
+                      <Text style={styles.langCode}>{code.toUpperCase()}</Text>
+                    </View>
+                    {active && (
+                      <MaterialCommunityIcons name="check-circle" size={18} color={colors.brandGold} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.langHint}>{t('profile.language.hint')}</Text>
+          </View>
+
           <View style={[shared.card, { marginTop: spacing.xl }]}>
-            <Text style={styles.infoTitle}>Acerca de AFE™ Safety Check</Text>
+            <Text style={styles.infoTitle}>{t('profile.about.title')}</Text>
             <Text style={[shared.body, { marginTop: spacing.sm }]}>
-              AFEtm (Alarma de Afectación Fisiológica Temprana) es un
-              protocolo preventivo de apoyo a decisiones que evalúa la
-              recuperación cardiaca durante un esfuerzo controlado.
+              {t('profile.about.body')}
             </Text>
             <View style={styles.bulletRow}>
               <MaterialCommunityIcons name="check-circle-outline" size={16} color={colors.zoneGreen} />
-              <Text style={[shared.body, { flex: 1 }]}>Apoya decisiones preventivas.</Text>
+              <Text style={[shared.body, { flex: 1 }]}>{t('profile.about.b1')}</Text>
             </View>
             <View style={styles.bulletRow}>
               <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.zoneYellow} />
-              <Text style={[shared.body, { flex: 1 }]}>No es una aplicación de diagnóstico médico.</Text>
+              <Text style={[shared.body, { flex: 1 }]}>{t('profile.about.b2')}</Text>
             </View>
             <View style={styles.bulletRow}>
               <MaterialCommunityIcons name="stethoscope" size={16} color={colors.zoneRed} />
-              <Text style={[shared.body, { flex: 1 }]}>
-                No sustituye la evaluación profesional.
-              </Text>
+              <Text style={[shared.body, { flex: 1 }]}>{t('profile.about.b3')}</Text>
             </View>
           </View>
 
@@ -148,12 +192,12 @@ export default function ProfileTab() {
         </ScrollView>
       ) : (
         <View style={styles.center}>
-          <Text style={shared.body}>Sin perfil</Text>
+          <Text style={shared.body}>{t('profile.empty')}</Text>
           <Pressable
             style={[shared.primaryBtn, { marginTop: spacing.lg, paddingHorizontal: spacing.xxl }]}
             onPress={() => router.push('/profile-setup')}
           >
-            <Text style={shared.primaryBtnText}>Crear perfil</Text>
+            <Text style={shared.primaryBtnText}>{t('profile.create')}</Text>
           </Pressable>
         </View>
       )}
@@ -237,4 +281,24 @@ const styles = StyleSheet.create({
   },
   brandFooter: { color: colors.brandGold, fontSize: 18, fontWeight: '900', letterSpacing: 4 },
   tagline: { fontSize: 11, fontWeight: '700', letterSpacing: 2, marginTop: spacing.sm },
+  langHead: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  langSection: {
+    color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '800',
+  },
+  langRow: { flexDirection: 'row', gap: spacing.md },
+  langBtn: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  flag: { fontSize: 20 },
+  langLabel: { color: colors.onSurface, fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+  langCode: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
+  langHint: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 15, marginTop: spacing.md },
 });

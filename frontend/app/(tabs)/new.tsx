@@ -3,83 +3,61 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
+import { useI18n } from '@/src/lib/i18n';
 
 export default function NewChoice() {
   const router = useRouter();
+  const { t } = useI18n();
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="new-choice-screen">
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>NUEVO SAFETY CHECK</Text>
-        <Text style={shared.h2}>Elige el modo</Text>
-        <Text style={[shared.body, { marginTop: spacing.sm }]}>
-          Realiza tu chequeo AFE™ usando un pulsómetro Bluetooth (recomendado)
-          o ingresando los valores manualmente.
-        </Text>
+        <Text style={styles.eyebrow}>{t('new.eyebrow')}</Text>
+        <Text style={shared.h2}>{t('new.title')}</Text>
+        <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('new.subtitle')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
-        {/* Guided */}
         <Pressable
           testID="mode-guided"
           onPress={() => router.push('/assessment-flow/guided')}
-          style={({ pressed }) => [
-            styles.modeCard,
-            styles.modeGuided,
-            pressed && { opacity: 0.9 },
-          ]}
+          style={({ pressed }) => [styles.modeCard, styles.modeGuided, pressed && { opacity: 0.9 }]}
         >
           <View style={styles.badgeRow}>
             <View style={[styles.pill, { backgroundColor: colors.brandGold }]}>
-              <Text style={styles.pillText}>RECOMENDADO</Text>
+              <Text style={styles.pillText}>{t('new.guided.badge')}</Text>
             </View>
           </View>
           <View style={[styles.iconWrap, { borderColor: colors.brandGold, shadowColor: colors.brandGold }]}>
             <MaterialCommunityIcons name="bluetooth-connect" size={30} color={colors.brandGold} />
           </View>
-          <Text style={styles.modeTitle}>Guiado con pulsómetro</Text>
-          <Text style={styles.modeDesc}>
-            Conecta un monitor de pulso Bluetooth compatible (perfil HR 0x180D).
-            Registra FCr en vivo, alcanza la FCP y captura la ventana de 3 min
-            con promedios anti-ruido de 5 s.
-          </Text>
+          <Text style={styles.modeTitle}>{t('new.guided.title')}</Text>
+          <Text style={styles.modeDesc}>{t('new.guided.desc')}</Text>
           <View style={styles.stepsRow}>
-            <Step n="1" text="Escanear" />
-            <Step n="2" text="Conectar" />
-            <Step n="3" text="FCr" />
-            <Step n="4" text="FCP" />
-            <Step n="5" text="Recuperación" />
+            <Step n="1" text={t('new.step.scan')} />
+            <Step n="2" text={t('new.step.connect')} />
+            <Step n="3" text={t('new.step.rhr')} />
+            <Step n="4" text={t('new.step.fcp')} />
+            <Step n="5" text={t('new.step.recovery')} />
           </View>
         </Pressable>
 
-        {/* Manual */}
         <Pressable
           testID="mode-manual"
           onPress={() => router.push('/assessment-flow/manual')}
-          style={({ pressed }) => [
-            styles.modeCard,
-            styles.modeManual,
-            pressed && { opacity: 0.9 },
-          ]}
+          style={({ pressed }) => [styles.modeCard, styles.modeManual, pressed && { opacity: 0.9 }]}
         >
           <View style={styles.iconWrap}>
             <MaterialCommunityIcons name="pencil-outline" size={28} color={colors.onSurfaceSecondary} />
           </View>
-          <Text style={styles.modeTitle}>Manual</Text>
-          <Text style={styles.modeDesc}>
-            Ingresa manualmente FCr y las lecturas de la ventana de
-            recuperación. Útil si no tienes un pulsómetro compatible.
-          </Text>
+          <Text style={styles.modeTitle}>{t('new.manual.title')}</Text>
+          <Text style={styles.modeDesc}>{t('new.manual.desc')}</Text>
         </Pressable>
 
         {Platform.OS === 'web' ? (
           <View style={styles.warn} testID="ble-web-warning">
             <MaterialCommunityIcons name="alert-outline" size={16} color={colors.zoneYellow} />
-            <Text style={styles.warnText}>
-              El modo Guiado requiere Bluetooth Low Energy nativo y no funciona
-              en la vista previa web ni en Expo Go. Genera un build de
-              iOS/Android para probarlo.
-            </Text>
+            <Text style={styles.warnText}>{t('new.web.warning')}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -99,37 +77,21 @@ function Step({ n, text }: { n: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
+  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.md },
   eyebrow: {
     color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700', marginBottom: 4,
   },
   modeCard: {
-    borderWidth: 1.5,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
+    borderWidth: 1.5, borderRadius: radius.lg, padding: spacing.xl,
     backgroundColor: colors.surfaceSecondary,
   },
   modeGuided: {
-    borderColor: colors.brandGold,
-    shadowColor: colors.brandGold,
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    borderColor: colors.brandGold, shadowColor: colors.brandGold,
+    shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 6,
   },
-  modeManual: {
-    borderColor: colors.border,
-  },
+  modeManual: { borderColor: colors.border },
   badgeRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm },
-  pill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
+  pill: { paddingHorizontal: spacing.md, paddingVertical: 3, borderRadius: radius.pill },
   pillText: { color: '#000', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   iconWrap: {
     width: 54, height: 54, borderRadius: 27,
@@ -144,9 +106,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3, marginBottom: spacing.sm,
   },
   modeDesc: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19 },
-  stepsRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md,
-  },
+  stepsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepBadge: {
     width: 20, height: 20, borderRadius: radius.pill,

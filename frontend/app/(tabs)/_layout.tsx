@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/src/lib/theme';
+import { useI18n } from '@/src/lib/i18n';
 
 export default function TabsLayout() {
+  const { t } = useI18n();
   return (
     <Tabs
       screenOptions={{
@@ -23,7 +25,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Inicio',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="shield-check-outline" size={size} color={color} />
           ),
@@ -33,7 +35,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="new"
         options={{
-          title: 'Nuevo',
+          title: t('tabs.new'),
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="heart-pulse" size={size + 2} color={color} />
           ),
@@ -43,7 +45,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'Historial',
+          title: t('tabs.history'),
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="history" size={size} color={color} />
           ),
@@ -53,7 +55,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Perfil',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} />
           ),

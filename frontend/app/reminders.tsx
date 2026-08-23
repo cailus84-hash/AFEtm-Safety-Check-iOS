@@ -16,8 +16,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   Reminder,
   Weekday,
-  WEEKDAY_LABELS,
-  WEEKDAY_LONG,
   createReminder,
   deleteReminder,
   ensurePermission,
@@ -25,20 +23,24 @@ import {
   loadReminders,
 } from '@/src/lib/reminders';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
+import { useI18n } from '@/src/lib/i18n';
 
 export default function Reminders() {
   const router = useRouter();
+  const { t } = useI18n();
   const [items, setItems] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [permBlocked, setPermBlocked] = useState(false);
 
-  // Create form state
-  const [label, setLabel] = useState('Chequeo antes de entrenar');
+  const [label, setLabel] = useState(t('reminders.field.label.default'));
   const [date, setDate] = useState(() => new Date(new Date().setHours(7, 30, 0, 0)));
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
-  const [selectedDays, setSelectedDays] = useState<Weekday[]>([2, 4, 6]); // L,M,V
+  const [selectedDays, setSelectedDays] = useState<Weekday[]>([2, 4, 6]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const dayShort = (d: Weekday) => t(`weekday.short.${d}` as any);
+  const dayLong = (d: Weekday) => t(`weekday.long.${d}` as any);
 
   const load = useCallback(async () => {
     try {
@@ -62,20 +64,20 @@ export default function Reminders() {
   const create = async () => {
     setError(null);
     if (selectedDays.length === 0) {
-      setError('Selecciona al menos un día.');
+      setError(t('reminders.error.days'));
       return;
     }
     setSaving(true);
     try {
       await createReminder({
-        label: label.trim() || 'Chequeo AFE',
+        label: label.trim() || t('reminders.field.label.default'),
         hour: date.getHours(),
         minute: date.getMinutes(),
         weekdays: selectedDays,
       });
       await load();
     } catch (e: any) {
-      setError(e?.message || 'No se pudo crear el recordatorio.');
+      setError(e?.message || t('reminders.error.save'));
     } finally {
       setSaving(false);
     }
@@ -92,36 +94,27 @@ export default function Reminders() {
         <Pressable onPress={() => router.back()} style={styles.iconBtn} testID="reminders-back-btn">
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.topTitle}>Recordatorios</Text>
+        <Text style={styles.topTitle}>{t('reminders.title')}</Text>
         <View style={styles.iconBtn} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
-        <Text style={styles.eyebrow}>HÁBITO PREVENTIVO</Text>
-        <Text style={shared.h2}>Programa tus chequeos</Text>
-        <Text style={[shared.body, { marginTop: spacing.sm }]}>
-          Recibe una notificación local antes de tus sesiones exigentes. Ideal
-          justo antes de tu ventana habitual de entrenamiento.
-        </Text>
+        <Text style={styles.eyebrow}>{t('reminders.eyebrow')}</Text>
+        <Text style={shared.h2}>{t('reminders.heading')}</Text>
+        <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('reminders.subtitle')}</Text>
 
         {permBlocked && (
           <View style={styles.warn} testID="reminders-perm-warn">
             <MaterialCommunityIcons name="bell-off-outline" size={16} color={colors.zoneYellow} />
-            <Text style={styles.warnText}>
-              Notificaciones no permitidas. Habilítalas en Ajustes del sistema
-              para poder recibir los recordatorios.
-            </Text>
+            <Text style={styles.warnText}>{t('reminders.perm.blocked')}</Text>
           </View>
         )}
 
-        {/* Existing list */}
-        <Text style={[styles.section, { marginTop: spacing.xl }]}>ACTIVOS</Text>
+        <Text style={[styles.section, { marginTop: spacing.xl }]}>{t('reminders.section.active')}</Text>
         {loading ? (
           <ActivityIndicator color={colors.brandGold} />
         ) : items.length === 0 ? (
-          <Text style={[shared.muted, { marginTop: spacing.sm }]}>
-            No hay recordatorios activos.
-          </Text>
+          <Text style={[shared.muted, { marginTop: spacing.sm }]}>{t('reminders.empty')}</Text>
         ) : (
           <View style={{ gap: spacing.sm }}>
             {items.map((r) => (
@@ -134,7 +127,7 @@ export default function Reminders() {
                   <View style={styles.daysRow}>
                     {r.weekdays.map((d) => (
                       <View key={d} style={styles.dayChip}>
-                        <Text style={styles.dayChipText}>{WEEKDAY_LABELS[d]}</Text>
+                        <Text style={styles.dayChipText}>{dayShort(d)}</Text>
                       </View>
                     ))}
                   </View>
@@ -151,23 +144,22 @@ export default function Reminders() {
           </View>
         )}
 
-        {/* Create form */}
-        <Text style={[styles.section, { marginTop: spacing.xxl }]}>NUEVO</Text>
+        <Text style={[styles.section, { marginTop: spacing.xxl }]}>{t('reminders.section.new')}</Text>
         <View style={[shared.card, { gap: spacing.md }]}>
           <View>
-            <Text style={shared.label}>Etiqueta</Text>
+            <Text style={shared.label}>{t('reminders.field.label')}</Text>
             <TextInput
               testID="reminder-label-input"
               value={label}
               onChangeText={setLabel}
-              placeholder="Chequeo antes de entrenar"
+              placeholder={t('reminders.field.label.ph')}
               placeholderTextColor={colors.onSurfaceTertiary}
               style={shared.input}
             />
           </View>
 
           <View>
-            <Text style={shared.label}>Hora</Text>
+            <Text style={shared.label}>{t('reminders.field.time')}</Text>
             {Platform.OS === 'android' ? (
               <>
                 <Pressable
@@ -208,7 +200,7 @@ export default function Reminders() {
           </View>
 
           <View>
-            <Text style={shared.label}>Días</Text>
+            <Text style={shared.label}>{t('reminders.field.days')}</Text>
             <View style={styles.weekRow}>
               {([2, 3, 4, 5, 6, 7, 1] as Weekday[]).map((d) => {
                 const active = selectedDays.includes(d);
@@ -223,14 +215,16 @@ export default function Reminders() {
                     ]}
                   >
                     <Text style={[styles.weekChipText, active && { color: colors.brandGold }]}>
-                      {WEEKDAY_LABELS[d]}
+                      {dayShort(d)}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
             <Text style={[shared.muted, { marginTop: 6 }]} numberOfLines={1}>
-              {selectedDays.length === 0 ? 'Selecciona días' : selectedDays.map((d) => WEEKDAY_LONG[d]).join(', ')}
+              {selectedDays.length === 0
+                ? t('reminders.days.pick')
+                : selectedDays.map((d) => dayLong(d)).join(', ')}
             </Text>
           </View>
 
@@ -243,7 +237,7 @@ export default function Reminders() {
             style={({ pressed }) => [shared.primaryBtn, (pressed || saving) && { opacity: 0.85 }]}
           >
             {saving ? <ActivityIndicator color="#000" /> : (
-              <Text style={shared.primaryBtnText}>Crear recordatorio</Text>
+              <Text style={shared.primaryBtnText}>{t('reminders.create')}</Text>
             )}
           </Pressable>
         </View>

@@ -1,0 +1,928 @@
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Localization from 'expo-localization';
+
+export type Lang = 'en' | 'es';
+const STORAGE_KEY = 'afetm.lang';
+
+/**
+ * Master dictionary. English is 100% the source of truth. Spanish mirrors
+ * every key. If a key is missing in the active language we fall back to
+ * English so nothing ever renders as a raw key.
+ */
+const dict = {
+  en: {
+    // Brand + onboarding
+    'brand.name': 'AFE™ Safety Check',
+    'brand.tag': 'SAFETY CHECK',
+    'brand.subtitle': 'Sports Performance Intelligence',
+    'brand.tagline1': 'Before Training.',
+    'brand.tagline2': 'Before Competition.',
+    'brand.tagline3': 'Before Pushing Harder.',
+    'onboarding.description':
+      'Preventive cardiovascular recovery check to support responsible decisions before continuing your planned physical activity.',
+    'onboarding.cta': 'Get Started',
+    'onboarding.disclaimer':
+      'Not a medical diagnostic application. Does not replace professional evaluation.',
+    'onboarding.hero.alt': 'AFE™ Visual Color Guide',
+    'onboarding.hero.badge': 'OFFICIAL VISUAL GUIDE',
+
+    // Common actions
+    'common.next': 'Next',
+    'common.back': 'Back',
+    'common.cancel': 'Cancel',
+    'common.save': 'Save',
+    'common.retry': 'Retry',
+    'common.close': 'Close',
+    'common.delete': 'Delete',
+    'common.continue': 'Continue',
+    'common.loading': 'Loading…',
+    'common.pending': 'Pending',
+    'common.unclassified': 'Unclassified',
+
+    // Tabs
+    'tabs.home': 'Home',
+    'tabs.new': 'New',
+    'tabs.history': 'History',
+    'tabs.profile': 'Profile',
+
+    // Home
+    'home.eyebrow': 'AFE™ SAFETY CHECK',
+    'home.greeting': 'Hello',
+    'home.badge': 'PREVENTIVE',
+    'home.newCheck': 'New Safety Check',
+    'home.lastEval': 'Last assessment',
+    'home.pending.title': 'Pending',
+    'home.pending.desc':
+      'Result pending sync with the official AFEtm engine. Tap to retry.',
+    'home.emptyTitle': 'No previous assessments',
+    'home.emptyBody':
+      'Take your first Safety Check to know your current cardiovascular recovery status.',
+    'home.stats.fcp': 'FCP TARGET',
+    'home.stats.count': 'ASSESSMENTS',
+    'home.stats.age': 'AGE',
+    'home.stats.age.unit': 'years',
+    'home.stats.fcp.unit': 'bpm',
+    'home.trend.title': 'Weekly trend',
+    'home.trend.subtitle': 'Recovery (RECpct) — last {n} assessments',
+    'home.trend.empty': 'Take more checks to see your trend.',
+    'home.how.title': 'How does it work?',
+    'home.how.1': 'Record your Resting Heart Rate (RHR).',
+    'home.how.2': 'Reach the FCP target with a controlled effort.',
+    'home.how.3': 'Record your HR during 3 minutes of recovery.',
+    'home.how.4': 'Receive your AFE zone and suggested preventive action.',
+    'home.disclaimer':
+      'Preventive tool. Not a medical diagnostic application. Does not replace a health professional.',
+    'home.meta.pattern': 'Pattern {name}',
+
+    // New choice screen
+    'new.eyebrow': 'NEW SAFETY CHECK',
+    'new.title': 'Choose the mode',
+    'new.subtitle':
+      'Run your AFE™ check using a Bluetooth heart-rate monitor (recommended) or by entering the values manually.',
+    'new.guided.title': 'Guided with heart-rate monitor',
+    'new.guided.desc':
+      'Connect a compatible Bluetooth heart-rate monitor (HR profile 0x180D). Records RHR live, reaches FCP and captures the 3-minute window with 5s anti-noise averaging.',
+    'new.guided.badge': 'RECOMMENDED',
+    'new.step.scan': 'Scan',
+    'new.step.connect': 'Connect',
+    'new.step.rhr': 'RHR',
+    'new.step.fcp': 'FCP',
+    'new.step.recovery': 'Recovery',
+    'new.manual.title': 'Manual',
+    'new.manual.desc':
+      'Manually enter RHR and the recovery-window readings. Useful if you do not have a compatible monitor.',
+    'new.web.warning':
+      'Guided mode requires native Bluetooth Low Energy and does not work in the web preview or in Expo Go. Generate an iOS/Android build to try it.',
+
+    // History
+    'history.eyebrow': 'RECORD',
+    'history.title': 'History',
+    'history.compare': 'Compare',
+    'history.exit': 'Exit',
+    'history.filter.all': 'All',
+    'history.empty.title': 'No history available',
+    'history.empty.body': 'Take your first Safety Check and your assessments will appear here.',
+    'history.compare.selectTwo': 'Select 2 assessments',
+    'history.compare.selectOne': 'Select 1 more',
+    'history.compare.ready': '2 assessments selected',
+    'history.meta.rec': 'Rec {value}%',
+
+    // Compare
+    'compare.title': 'Compare',
+    'compare.eyebrow': 'SESSIONS',
+    'compare.heading': 'Overlaid curves',
+    'compare.section.deltas': 'DIFFERENCES (B − A)',
+    'compare.footer':
+      'Higher RECpct and HRR mean better recovery; a lower τ (tau) means faster kinetics.',
+    'compare.session.a': 'A · Previous',
+    'compare.session.b': 'B · Recent',
+    'compare.error.title': 'Comparison not available',
+    'compare.error.select': 'Select exactly two assessments.',
+
+    // Profile setup
+    'setup.eyebrow': 'STEP 1 OF 1',
+    'setup.title': 'Athlete profile',
+    'setup.subtitle':
+      'Enter your baseline data. We use it to compute your peak heart-rate target.',
+    'setup.field.name': 'Name',
+    'setup.field.name.ph': 'Your name',
+    'setup.field.age': 'Age',
+    'setup.field.weight': 'Weight (kg)',
+    'setup.field.sport': 'Sport',
+    'setup.field.target': 'Target zone (optional)',
+    'setup.field.target.hint':
+      'When you reach or exceed this zone in a check, we celebrate it with you.',
+    'setup.target.none': 'None',
+    'setup.target.green': 'Green · Favorable',
+    'setup.target.blue': 'Blue · Optimal',
+    'setup.error.name': 'Enter your name.',
+    'setup.error.age': 'Age must be between 10 and 90.',
+    'setup.error.weight': 'Weight must be between 20 and 250 kg.',
+    'setup.error.save': 'Could not save profile.',
+    'setup.save': 'Save profile',
+    'sport.running': 'Running',
+    'sport.cycling': 'Cycling',
+    'sport.football': 'Football',
+    'sport.crossfit': 'CrossFit',
+    'sport.swimming': 'Swimming',
+    'sport.other': 'Other',
+
+    // Profile tab
+    'profile.eyebrow': 'ATHLETE',
+    'profile.title': 'Profile',
+    'profile.edit': 'Edit profile',
+    'profile.reminders': 'Check reminders',
+    'profile.target.blue': 'Target: Blue Zone',
+    'profile.target.green': 'Target: Green Zone',
+    'profile.stat.age': 'AGE',
+    'profile.stat.age.unit': 'years',
+    'profile.stat.weight': 'WEIGHT',
+    'profile.stat.weight.unit': 'kg',
+    'profile.stat.fcp': 'FCP TARGET',
+    'profile.stat.fcp.unit': 'bpm',
+    'profile.about.title': 'About AFE™ Safety Check',
+    'profile.about.body':
+      'AFEtm (Early Physiological Impact Alarm) is a preventive decision-support protocol that evaluates cardiac recovery during a controlled effort.',
+    'profile.about.b1': 'Supports preventive decision-making.',
+    'profile.about.b2': 'Not a medical diagnostic application.',
+    'profile.about.b3': 'Does not replace professional evaluation.',
+    'profile.empty': 'No profile',
+    'profile.create': 'Create profile',
+    'profile.language.section': 'LANGUAGE',
+    'profile.language.en': 'English',
+    'profile.language.es': 'Español',
+    'profile.language.hint':
+      'Switch the entire app between 100% English and 100% Spanish.',
+
+    // Reminders
+    'reminders.title': 'Reminders',
+    'reminders.eyebrow': 'PREVENTIVE HABIT',
+    'reminders.heading': 'Schedule your checks',
+    'reminders.subtitle':
+      'Get a local notification before your demanding sessions. Ideal right before your usual training window.',
+    'reminders.perm.blocked':
+      'Notifications are disabled. Enable them in system Settings to receive reminders.',
+    'reminders.section.active': 'ACTIVE',
+    'reminders.section.new': 'NEW',
+    'reminders.empty': 'No active reminders.',
+    'reminders.field.label': 'Label',
+    'reminders.field.label.default': 'Check before training',
+    'reminders.field.label.ph': 'Check before training',
+    'reminders.field.time': 'Time',
+    'reminders.field.days': 'Days',
+    'reminders.days.pick': 'Pick days',
+    'reminders.error.days': 'Pick at least one day.',
+    'reminders.error.save': 'Could not create the reminder.',
+    'reminders.create': 'Create reminder',
+    'weekday.short.1': 'S',
+    'weekday.short.2': 'M',
+    'weekday.short.3': 'T',
+    'weekday.short.4': 'W',
+    'weekday.short.5': 'T',
+    'weekday.short.6': 'F',
+    'weekday.short.7': 'S',
+    'weekday.long.1': 'Sunday',
+    'weekday.long.2': 'Monday',
+    'weekday.long.3': 'Tuesday',
+    'weekday.long.4': 'Wednesday',
+    'weekday.long.5': 'Thursday',
+    'weekday.long.6': 'Friday',
+    'weekday.long.7': 'Saturday',
+
+    // Manual assessment
+    'assess.step': 'STEP {n} OF {total}',
+    'assess.rhr.title': 'Resting Heart Rate',
+    'assess.rhr.body':
+      'Before exerting yourself, record your resting HR (ideally seated and calm for 2 minutes).',
+    'assess.rhr.range': 'Typical range 40–90 bpm',
+    'assess.fcp.title': 'Peak Heart-Rate target',
+    'assess.fcp.body':
+      'Effort target computed from your age. Reach it with a controlled effort before starting the recovery window.',
+    'assess.fcp.label': 'FCP TARGET',
+    'assess.fcp.tip':
+      'When you reach the FCP, stop the effort and start recording your HR on the schedule in the next step.',
+    'assess.readings.title': 'Recovery window',
+    'assess.readings.body':
+      'Record your HR at the following intervals (seconds since the effort ended).',
+    'assess.readings.hint':
+      't=0s is your HR when you reach the FCP. t=180s is your HR at 3 minutes.',
+    'assess.context.title': 'Preventive context',
+    'assess.context.body':
+      'These questions tune the operational interpretation. They do not modify the computed zone.',
+    'assess.submit': 'Compute result',
+    'assess.error.rhr': 'RHR must be between 30 and 130 bpm.',
+    'assess.error.reading': 'Reading t={t}s must be between 40 and 230 bpm.',
+    'assess.error.peak': 'Peak HR (t=0s) must be close to the FCP target ({fcp}).',
+    'assess.error.upstream':
+      'Authoritative AFEtm server rejected the request (HTTP {status}). Detail: {body}. The assessment WAS NOT saved.',
+    'assess.error.generic': 'Could not compute the assessment.',
+
+    // FCPv questions
+    'fcpv.q.sleep': 'Sleep the night before',
+    'fcpv.q.sleep.hint': 'How did you sleep?',
+    'fcpv.q.sleep.0': 'Good (7-9 h)',
+    'fcpv.q.sleep.1': 'Fair',
+    'fcpv.q.sleep.2': 'Poor / not enough',
+    'fcpv.q.hydration': 'Hydration',
+    'fcpv.q.hydration.hint': 'How hydrated are you today?',
+    'fcpv.q.hydration.0': 'Adequate',
+    'fcpv.q.hydration.1': 'Low',
+    'fcpv.q.hydration.2': 'Very low',
+    'fcpv.q.symptoms': 'Current symptoms',
+    'fcpv.q.symptoms.hint': 'Dizziness, palpitations, unusual fatigue',
+    'fcpv.q.symptoms.0': 'None',
+    'fcpv.q.symptoms.1': 'Mild',
+    'fcpv.q.symptoms.2': 'Noticeable',
+    'fcpv.q.recent_illness': 'Recent illness',
+    'fcpv.q.recent_illness.hint': 'Last 14 days',
+    'fcpv.q.recent_illness.0': 'No',
+    'fcpv.q.recent_illness.1': 'Mild',
+    'fcpv.q.recent_illness.2': 'Yes',
+    'fcpv.q.subjective_load': 'Subjective load',
+    'fcpv.q.subjective_load.hint': 'Perception of prior effort',
+    'fcpv.q.subjective_load.0': 'Low',
+    'fcpv.q.subjective_load.1': 'Moderate',
+    'fcpv.q.subjective_load.2': 'High',
+
+    // Guided
+    'guided.title': 'Guided with BLE',
+    'guided.phase.scan': 'Searching for monitor',
+    'guided.phase.connect': 'Connecting',
+    'guided.phase.ready': 'Ready',
+    'guided.phase.fcr': 'Record RHR',
+    'guided.phase.fcp': 'Reach FCP',
+    'guided.phase.recovery': '3-min recovery',
+    'guided.phase.submit': 'Computing',
+    'guided.phase.error': 'Error',
+    'guided.unsupported.title': 'BLE not available in this environment',
+    'guided.unsupported.web':
+      'The web preview does not support Bluetooth Low Energy. Scan the Expo QR or generate a native build to use Guided mode.',
+    'guided.unsupported.native':
+      'Expo Go does not include react-native-ble-plx. Generate a development build (Publish → Generate iOS/Android build) to try it.',
+    'guided.unsupported.cta': 'Use manual mode',
+    'guided.live.label': 'LIVE HEART RATE',
+    'guided.live.active': 'Active signal from the monitor.',
+    'guided.live.idle': 'Waiting for signal from the monitor…',
+    'guided.devices': 'DEVICES',
+    'guided.scan': 'Scan',
+    'guided.scanning': 'Searching for compatible monitors (HR profile 0x180D)…',
+    'guided.no.devices':
+      'No monitors found. Make sure it is on and in pairing mode.',
+    'guided.connecting.title': 'Connecting…',
+    'guided.connecting.body': 'Establishing connection with the monitor.',
+    'guided.ready.title': 'Monitor connected',
+    'guided.ready.body':
+      'Get comfortable and calm. In the next step we will record your Resting HR (RHR).',
+    'guided.fcr.title': 'Record your RHR',
+    'guided.fcr.body':
+      'Sit and breathe calmly for ~1 minute. When your live HR is stable, press Register. We will automatically average the last 15 s.',
+    'guided.fcr.register': 'Register RHR',
+    'guided.fcr.error': 'Could not register RHR. Stay calm and wait a few seconds.',
+    'guided.fcp.title': 'Reach your FCP target',
+    'guided.fcp.body':
+      'Perform a controlled effort until you approach the target. When you reach it, stop the effort and press Start recovery.',
+    'guided.fcp.rhr': 'RHR',
+    'guided.fcp.target': 'FCP TARGET',
+    'guided.fcp.live': 'LIVE',
+    'guided.fcp.start': 'Start recovery',
+    'guided.fcp.error': 'Reach at least ~{n} bpm before starting recovery.',
+    'guided.recovery.captures': 'AUTOMATIC CAPTURES',
+    'guided.recovery.captures.hint':
+      'Each checkpoint averages the last 5 s to remove signal noise.',
+    'guided.recovery.peak': 't=0s (Peak)',
+    'guided.submit.title': 'Computing result…',
+    'guided.submit.body': 'Analyzing your recovery curve.',
+    'guided.error.title': 'Error',
+    'guided.error.retry': 'Retry',
+    'guided.error.default': 'Something went wrong. Try again.',
+    'guided.perm.title': 'Permissions required',
+    'guided.perm.body':
+      'Grant Bluetooth access so we can detect your heart-rate monitor.',
+    'guided.perm.retry': 'Retry permissions',
+    'guided.reconnect':
+      'Reconnecting to monitor… Timer keeps running. Attempt {n}.',
+    'guided.pill.scanning': 'Scanning…',
+    'guided.pill.disconnected': 'Not connected',
+    'guided.pill.reconnecting': 'Reconnecting… ({n})',
+
+    // Detail
+    'detail.title': 'Result',
+    'detail.notFound': 'Assessment not found',
+    'detail.back': 'Back',
+    'detail.section.metrics': 'Recovery metrics',
+    'detail.section.reference': 'Reference data',
+    'detail.section.readings': 'Readings per checkpoint',
+    'detail.section.context': 'Preventive context (FCPv)',
+    'detail.section.chart': 'Recovery curve',
+    'detail.zone.eyebrow': 'AFE ZONE',
+    'detail.chip.pattern': 'PATTERN',
+    'detail.chip.action': 'ACTION',
+    'detail.pending.eyebrow': 'STATUS',
+    'detail.pending.title': 'Pending sync',
+    'detail.pending.desc':
+      'Result pending sync with the official AFEtm engine.',
+    'detail.pending.hint':
+      'Measurements were saved correctly. The zone (Blue / Green / Yellow / Red) is only shown when the authoritative server classifies it.',
+    'detail.resync': 'Retry sync',
+    'detail.resync.error': 'Could not retry the sync.',
+    'detail.celebrate': 'You reached your target zone! Great recovery.',
+    'detail.metric.hrr.hint': 'Drop 1 min',
+    'detail.metric.recpct.hint': 'Recovery 3 min',
+    'detail.metric.aurc.hint': 'Area under curve',
+    'detail.metric.tau.hint': 'Kinetics',
+    'detail.ref.rhr': 'RHR',
+    'detail.ref.peak': 'Peak HR',
+    'detail.ref.fcp': 'FCP target',
+    'detail.ref.age': 'Age',
+    'detail.ref.age.unit': 'years',
+    'detail.fcpv.sleep': 'Sleep',
+    'detail.fcpv.hydration': 'Hydration',
+    'detail.fcpv.symptoms': 'Symptoms',
+    'detail.fcpv.illness': 'Recent illness',
+    'detail.fcpv.load': 'Subjective load',
+    'detail.fcpv.total': 'TOTAL',
+    'detail.contextFlag':
+      'Elevated context. Consider reducing load even if the computed zone is favorable.',
+    'detail.disclaimer':
+      'Not a medical diagnostic application. AFE™ Safety Check supports preventive decisions and does not replace professional evaluation. If you have concerning symptoms, stop the activity and follow the corresponding safety protocols.',
+    'detail.delete.confirm': 'Delete this assessment? This cannot be undone.',
+    'detail.home': 'Back to home',
+    'detail.share.web':
+      'Export is not available in the web preview. Try Expo Go or a native build.',
+    'detail.share.error': 'Could not share the result.',
+    'detail.share.unavailable': 'Sharing is not available on this device.',
+    'detail.share.prepareErr': 'Could not prepare the image.',
+    'detail.share.title': 'Share AFE™ result',
+
+    // Color guide
+    'guide.eyebrow': 'AFE™ VISUAL GUIDE',
+    'guide.title': 'Color interpretation',
+    'guide.subtitle':
+      'Guided classification based on the physiological evaluation of the day.',
+    'guide.footer': 'WHAT DOES THIS GUIDE MEAN?',
+    'guide.h1': 'Supports preventive decision-making.',
+    'guide.h2': 'Not a medical diagnostic application.',
+    'guide.h3': "Must be interpreted with the athlete's context.",
+
+    // Zones
+    'zone.BLUE.label': 'Blue · Optimal',
+    'zone.GREEN.label': 'Green · Favorable',
+    'zone.YELLOW.label': 'Yellow · Caution',
+    'zone.RED.label': 'Red · Alert',
+    'zone.BLUE.short': 'BLUE',
+    'zone.GREEN.short': 'GREEN',
+    'zone.YELLOW.short': 'YELLOW',
+    'zone.RED.short': 'RED',
+    'zone.BLUE.desc':
+      'Very favorable state. Excellent cardiac recovery and a highly positive overall response.',
+    'zone.GREEN.desc':
+      'Favorable state. Adequate condition to train or continue normally.',
+    'zone.YELLOW.desc':
+      'Caution state. Observe the context and adjust load if necessary.',
+    'zone.RED.desc':
+      'Alert state. Consider professional review before demanding efforts.',
+
+    // Patterns
+    'pattern.RAPID': 'Fast',
+    'pattern.NORMAL': 'Normal',
+    'pattern.DELAYED': 'Slow',
+    'pattern.FLATTENED': 'Plateau',
+    'pattern.UNSTABLE': 'Unstable',
+  },
+  es: {
+    'brand.name': 'AFE™ Safety Check',
+    'brand.tag': 'SAFETY CHECK',
+    'brand.subtitle': 'Sports Performance Intelligence',
+    'brand.tagline1': 'Antes de entrenar.',
+    'brand.tagline2': 'Antes de competir.',
+    'brand.tagline3': 'Antes de exigir más.',
+    'onboarding.description':
+      'Chequeo preventivo de recuperación cardiovascular para apoyar decisiones responsables antes de continuar con tu actividad física planificada.',
+    'onboarding.cta': 'Comenzar',
+    'onboarding.disclaimer':
+      'No es una aplicación de diagnóstico médico. No sustituye la evaluación profesional.',
+    'onboarding.hero.alt': 'Guía Visual de Colores AFE™',
+    'onboarding.hero.badge': 'GUÍA VISUAL OFICIAL',
+
+    'common.next': 'Siguiente',
+    'common.back': 'Atrás',
+    'common.cancel': 'Cancelar',
+    'common.save': 'Guardar',
+    'common.retry': 'Reintentar',
+    'common.close': 'Cerrar',
+    'common.delete': 'Eliminar',
+    'common.continue': 'Continuar',
+    'common.loading': 'Cargando…',
+    'common.pending': 'Pendiente',
+    'common.unclassified': 'Sin clasificar',
+
+    'tabs.home': 'Inicio',
+    'tabs.new': 'Nuevo',
+    'tabs.history': 'Historial',
+    'tabs.profile': 'Perfil',
+
+    'home.eyebrow': 'AFE™ SAFETY CHECK',
+    'home.greeting': 'Hola',
+    'home.badge': 'PREVENTIVO',
+    'home.newCheck': 'Nuevo Safety Check',
+    'home.lastEval': 'Última evaluación',
+    'home.pending.title': 'Pendiente',
+    'home.pending.desc':
+      'Resultado pendiente de sincronización con el motor oficial AFEtm. Toca para reintentar.',
+    'home.emptyTitle': 'Sin evaluaciones previas',
+    'home.emptyBody':
+      'Realiza tu primer Safety Check para conocer tu estado actual de recuperación cardiovascular.',
+    'home.stats.fcp': 'FCP OBJETIVO',
+    'home.stats.count': 'EVALUACIONES',
+    'home.stats.age': 'EDAD',
+    'home.stats.age.unit': 'años',
+    'home.stats.fcp.unit': 'bpm',
+    'home.trend.title': 'Tendencia semanal',
+    'home.trend.subtitle': 'Recuperación (RECpct) — últimas {n} evaluaciones',
+    'home.trend.empty': 'Realiza más chequeos para ver tu tendencia.',
+    'home.how.title': '¿Cómo funciona?',
+    'home.how.1': 'Registra tu Frecuencia Cardiaca en reposo (FCr).',
+    'home.how.2': 'Alcanza la FCP objetivo con un esfuerzo controlado.',
+    'home.how.3': 'Registra tu FC durante 3 minutos de recuperación.',
+    'home.how.4': 'Recibe tu zona AFE y acción preventiva sugerida.',
+    'home.disclaimer':
+      'Herramienta preventiva. No es una aplicación de diagnóstico médico ni sustituye a un profesional de la salud.',
+    'home.meta.pattern': 'Patrón {name}',
+
+    'new.eyebrow': 'NUEVO SAFETY CHECK',
+    'new.title': 'Elige el modo',
+    'new.subtitle':
+      'Realiza tu chequeo AFE™ usando un pulsómetro Bluetooth (recomendado) o ingresando los valores manualmente.',
+    'new.guided.title': 'Guiado con pulsómetro',
+    'new.guided.desc':
+      'Conecta un monitor de pulso Bluetooth compatible (perfil HR 0x180D). Registra FCr en vivo, alcanza la FCP y captura la ventana de 3 min con promedios anti-ruido de 5 s.',
+    'new.guided.badge': 'RECOMENDADO',
+    'new.step.scan': 'Escanear',
+    'new.step.connect': 'Conectar',
+    'new.step.rhr': 'FCr',
+    'new.step.fcp': 'FCP',
+    'new.step.recovery': 'Recuperación',
+    'new.manual.title': 'Manual',
+    'new.manual.desc':
+      'Ingresa manualmente FCr y las lecturas de la ventana de recuperación. Útil si no tienes un pulsómetro compatible.',
+    'new.web.warning':
+      'El modo Guiado requiere Bluetooth Low Energy nativo y no funciona en la vista previa web ni en Expo Go. Genera un build de iOS/Android para probarlo.',
+
+    'history.eyebrow': 'REGISTRO',
+    'history.title': 'Historial',
+    'history.compare': 'Comparar',
+    'history.exit': 'Salir',
+    'history.filter.all': 'Todas',
+    'history.empty.title': 'No hay historial disponible',
+    'history.empty.body':
+      'Realiza tu primer Safety Check y tus evaluaciones aparecerán aquí.',
+    'history.compare.selectTwo': 'Selecciona 2 evaluaciones',
+    'history.compare.selectOne': 'Selecciona 1 más',
+    'history.compare.ready': '2 evaluaciones seleccionadas',
+    'history.meta.rec': 'Rec {value}%',
+
+    'compare.title': 'Comparar',
+    'compare.eyebrow': 'SESIONES',
+    'compare.heading': 'Curvas superpuestas',
+    'compare.section.deltas': 'DIFERENCIAS (B − A)',
+    'compare.footer':
+      'RECpct y HRR más altos indican mejor recuperación; τ (tau) más bajo indica una cinética más rápida.',
+    'compare.session.a': 'A · Anterior',
+    'compare.session.b': 'B · Reciente',
+    'compare.error.title': 'Comparación no disponible',
+    'compare.error.select': 'Selecciona exactamente dos evaluaciones.',
+
+    'setup.eyebrow': 'PASO 1 DE 1',
+    'setup.title': 'Perfil del atleta',
+    'setup.subtitle':
+      'Ingresa tus datos base. Los usaremos para calcular tu Frecuencia Cardiaca Pico objetivo.',
+    'setup.field.name': 'Nombre',
+    'setup.field.name.ph': 'Tu nombre',
+    'setup.field.age': 'Edad',
+    'setup.field.weight': 'Peso (kg)',
+    'setup.field.sport': 'Deporte',
+    'setup.field.target': 'Zona objetivo (opcional)',
+    'setup.field.target.hint':
+      'Al alcanzar o superar esta zona en un chequeo, lo celebraremos contigo.',
+    'setup.target.none': 'Ninguna',
+    'setup.target.green': 'Verde · Favorable',
+    'setup.target.blue': 'Azul · Óptimo',
+    'setup.error.name': 'Ingresa tu nombre.',
+    'setup.error.age': 'Edad debe ser entre 10 y 90.',
+    'setup.error.weight': 'Peso debe ser entre 20 y 250 kg.',
+    'setup.error.save': 'No se pudo guardar el perfil.',
+    'setup.save': 'Guardar perfil',
+    'sport.running': 'Running',
+    'sport.cycling': 'Ciclismo',
+    'sport.football': 'Fútbol',
+    'sport.crossfit': 'CrossFit',
+    'sport.swimming': 'Natación',
+    'sport.other': 'Otro',
+
+    'profile.eyebrow': 'ATLETA',
+    'profile.title': 'Perfil',
+    'profile.edit': 'Editar perfil',
+    'profile.reminders': 'Recordatorios de chequeo',
+    'profile.target.blue': 'Objetivo: Zona Azul',
+    'profile.target.green': 'Objetivo: Zona Verde',
+    'profile.stat.age': 'EDAD',
+    'profile.stat.age.unit': 'años',
+    'profile.stat.weight': 'PESO',
+    'profile.stat.weight.unit': 'kg',
+    'profile.stat.fcp': 'FCP OBJETIVO',
+    'profile.stat.fcp.unit': 'bpm',
+    'profile.about.title': 'Acerca de AFE™ Safety Check',
+    'profile.about.body':
+      'AFEtm (Alarma de Afectación Fisiológica Temprana) es un protocolo preventivo de apoyo a decisiones que evalúa la recuperación cardiaca durante un esfuerzo controlado.',
+    'profile.about.b1': 'Apoya la toma de decisiones preventivas.',
+    'profile.about.b2': 'No es una aplicación de diagnóstico médico.',
+    'profile.about.b3': 'No sustituye la evaluación profesional.',
+    'profile.empty': 'Sin perfil',
+    'profile.create': 'Crear perfil',
+    'profile.language.section': 'IDIOMA',
+    'profile.language.en': 'English',
+    'profile.language.es': 'Español',
+    'profile.language.hint':
+      'Cambia toda la aplicación entre 100% inglés y 100% español.',
+
+    'reminders.title': 'Recordatorios',
+    'reminders.eyebrow': 'HÁBITO PREVENTIVO',
+    'reminders.heading': 'Programa tus chequeos',
+    'reminders.subtitle':
+      'Recibe una notificación local antes de tus sesiones exigentes. Ideal justo antes de tu ventana habitual de entrenamiento.',
+    'reminders.perm.blocked':
+      'Notificaciones no permitidas. Habilítalas en Ajustes del sistema para poder recibir los recordatorios.',
+    'reminders.section.active': 'ACTIVOS',
+    'reminders.section.new': 'NUEVO',
+    'reminders.empty': 'No hay recordatorios activos.',
+    'reminders.field.label': 'Etiqueta',
+    'reminders.field.label.default': 'Chequeo antes de entrenar',
+    'reminders.field.label.ph': 'Chequeo antes de entrenar',
+    'reminders.field.time': 'Hora',
+    'reminders.field.days': 'Días',
+    'reminders.days.pick': 'Selecciona días',
+    'reminders.error.days': 'Selecciona al menos un día.',
+    'reminders.error.save': 'No se pudo crear el recordatorio.',
+    'reminders.create': 'Crear recordatorio',
+    'weekday.short.1': 'D',
+    'weekday.short.2': 'L',
+    'weekday.short.3': 'M',
+    'weekday.short.4': 'M',
+    'weekday.short.5': 'J',
+    'weekday.short.6': 'V',
+    'weekday.short.7': 'S',
+    'weekday.long.1': 'Domingo',
+    'weekday.long.2': 'Lunes',
+    'weekday.long.3': 'Martes',
+    'weekday.long.4': 'Miércoles',
+    'weekday.long.5': 'Jueves',
+    'weekday.long.6': 'Viernes',
+    'weekday.long.7': 'Sábado',
+
+    'assess.step': 'PASO {n} DE {total}',
+    'assess.rhr.title': 'Frecuencia Cardiaca en Reposo',
+    'assess.rhr.body':
+      'Antes de esforzarte, registra tu FC en reposo (idealmente sentado y en calma por 2 minutos).',
+    'assess.rhr.range': 'Rango típico 40–90 bpm',
+    'assess.fcp.title': 'Frecuencia Cardiaca Pico objetivo',
+    'assess.fcp.body':
+      'Meta de esfuerzo calculada a partir de tu edad. Alcánzala con un esfuerzo controlado antes de iniciar la ventana de recuperación.',
+    'assess.fcp.label': 'FCP OBJETIVO',
+    'assess.fcp.tip':
+      'Cuando alcances la FCP, detén el esfuerzo y comienza a registrar tu FC según el cronograma del siguiente paso.',
+    'assess.readings.title': 'Ventana de recuperación',
+    'assess.readings.body':
+      'Registra tu FC en los siguientes intervalos (segundos desde el fin del esfuerzo).',
+    'assess.readings.hint':
+      't=0s es tu FC al alcanzar la FCP. t=180s es tu FC a los 3 minutos.',
+    'assess.context.title': 'Contexto preventivo',
+    'assess.context.body':
+      'Estas preguntas ajustan la interpretación operativa. No modifican la zona calculada.',
+    'assess.submit': 'Calcular resultado',
+    'assess.error.rhr': 'FCr debe estar entre 30 y 130 bpm.',
+    'assess.error.reading': 'Lectura t={t}s debe estar entre 40 y 230 bpm.',
+    'assess.error.peak': 'La FC pico (t=0s) debe estar cerca de la FCP objetivo ({fcp}).',
+    'assess.error.upstream':
+      'Servidor autoritativo AFEtm rechazó la solicitud (HTTP {status}). Detalle: {body}. La evaluación NO se guardó.',
+    'assess.error.generic': 'No se pudo calcular la evaluación.',
+
+    'fcpv.q.sleep': 'Sueño la noche anterior',
+    'fcpv.q.sleep.hint': '¿Cómo dormiste?',
+    'fcpv.q.sleep.0': 'Bien (7-9 h)',
+    'fcpv.q.sleep.1': 'Regular',
+    'fcpv.q.sleep.2': 'Mal / poco',
+    'fcpv.q.hydration': 'Hidratación',
+    'fcpv.q.hydration.hint': '¿Cómo estás hidratado hoy?',
+    'fcpv.q.hydration.0': 'Adecuada',
+    'fcpv.q.hydration.1': 'Baja',
+    'fcpv.q.hydration.2': 'Muy baja',
+    'fcpv.q.symptoms': 'Síntomas actuales',
+    'fcpv.q.symptoms.hint': 'Mareo, palpitaciones, fatiga inusual',
+    'fcpv.q.symptoms.0': 'Ninguno',
+    'fcpv.q.symptoms.1': 'Leves',
+    'fcpv.q.symptoms.2': 'Notables',
+    'fcpv.q.recent_illness': 'Enfermedad reciente',
+    'fcpv.q.recent_illness.hint': 'Últimos 14 días',
+    'fcpv.q.recent_illness.0': 'No',
+    'fcpv.q.recent_illness.1': 'Leve',
+    'fcpv.q.recent_illness.2': 'Sí',
+    'fcpv.q.subjective_load': 'Carga subjetiva',
+    'fcpv.q.subjective_load.hint': 'Percepción del esfuerzo previo',
+    'fcpv.q.subjective_load.0': 'Baja',
+    'fcpv.q.subjective_load.1': 'Moderada',
+    'fcpv.q.subjective_load.2': 'Alta',
+
+    'guided.title': 'Guiado con BLE',
+    'guided.phase.scan': 'Buscando pulsómetro',
+    'guided.phase.connect': 'Conectando',
+    'guided.phase.ready': 'Listo',
+    'guided.phase.fcr': 'Registrar FCr',
+    'guided.phase.fcp': 'Alcanzar FCP',
+    'guided.phase.recovery': 'Recuperación 3 min',
+    'guided.phase.submit': 'Calculando',
+    'guided.phase.error': 'Error',
+    'guided.unsupported.title': 'BLE no disponible en este entorno',
+    'guided.unsupported.web':
+      'La vista previa web no soporta Bluetooth Low Energy. Escanea el QR de Expo o genera un build nativo para usar el modo Guiado.',
+    'guided.unsupported.native':
+      'Expo Go no incluye react-native-ble-plx. Genera un build de desarrollo (Publish → Generate iOS/Android build) para probarlo.',
+    'guided.unsupported.cta': 'Usar modo manual',
+    'guided.live.label': 'FRECUENCIA EN VIVO',
+    'guided.live.active': 'Señal activa desde el pulsómetro.',
+    'guided.live.idle': 'Esperando señal del pulsómetro…',
+    'guided.devices': 'DISPOSITIVOS',
+    'guided.scan': 'Buscar',
+    'guided.scanning': 'Buscando pulsómetros compatibles (perfil HR 0x180D)…',
+    'guided.no.devices':
+      'No se encontraron pulsómetros. Asegúrate de que esté encendido y en modo emparejamiento.',
+    'guided.connecting.title': 'Conectando…',
+    'guided.connecting.body': 'Estableciendo conexión con el pulsómetro.',
+    'guided.ready.title': 'Pulsómetro conectado',
+    'guided.ready.body':
+      'Ponte cómodo y en calma. En el siguiente paso registraremos tu Frecuencia Cardiaca en Reposo (FCr).',
+    'guided.fcr.title': 'Registra tu FCr',
+    'guided.fcr.body':
+      'Siéntate y respira con calma durante ~1 minuto. Cuando tu FC en vivo esté estable, presiona Registrar. Promediaremos los últimos 15 s automáticamente.',
+    'guided.fcr.register': 'Registrar FCr',
+    'guided.fcr.error':
+      'No se pudo registrar FCr. Mantén la calma y espera unos segundos.',
+    'guided.fcp.title': 'Alcanza tu FCP objetivo',
+    'guided.fcp.body':
+      'Realiza un esfuerzo controlado hasta acercarte a la meta. Cuando la alcances, detén el esfuerzo y presiona Iniciar recuperación.',
+    'guided.fcp.rhr': 'FCr',
+    'guided.fcp.target': 'FCP OBJETIVO',
+    'guided.fcp.live': 'EN VIVO',
+    'guided.fcp.start': 'Iniciar recuperación',
+    'guided.fcp.error': 'Alcanza al menos ~{n} bpm antes de iniciar la recuperación.',
+    'guided.recovery.captures': 'CAPTURAS AUTOMÁTICAS',
+    'guided.recovery.captures.hint':
+      'Cada checkpoint promedia los últimos 5 s para eliminar ruido de señal.',
+    'guided.recovery.peak': 't=0s (Pico)',
+    'guided.submit.title': 'Calculando resultado…',
+    'guided.submit.body': 'Estamos analizando tu curva de recuperación.',
+    'guided.error.title': 'Error',
+    'guided.error.retry': 'Reintentar',
+    'guided.error.default': 'Ocurrió un problema. Intenta de nuevo.',
+    'guided.perm.title': 'Permisos requeridos',
+    'guided.perm.body':
+      'Concede acceso a Bluetooth para poder detectar tu pulsómetro.',
+    'guided.perm.retry': 'Reintentar permisos',
+    'guided.reconnect':
+      'Reconectando con el pulsómetro… El cronómetro sigue activo. Intento {n}.',
+    'guided.pill.scanning': 'Escaneando…',
+    'guided.pill.disconnected': 'Sin conexión',
+    'guided.pill.reconnecting': 'Reconectando… ({n})',
+
+    'detail.title': 'Resultado',
+    'detail.notFound': 'Evaluación no encontrada',
+    'detail.back': 'Volver',
+    'detail.section.metrics': 'Métricas de recuperación',
+    'detail.section.reference': 'Datos de referencia',
+    'detail.section.readings': 'Lecturas por checkpoint',
+    'detail.section.context': 'Contexto preventivo (FCPv)',
+    'detail.section.chart': 'Curva de recuperación',
+    'detail.zone.eyebrow': 'ZONA AFE',
+    'detail.chip.pattern': 'PATRÓN',
+    'detail.chip.action': 'ACCIÓN',
+    'detail.pending.eyebrow': 'ESTADO',
+    'detail.pending.title': 'Pendiente de sincronización',
+    'detail.pending.desc':
+      'Resultado pendiente de sincronización con el motor oficial AFEtm.',
+    'detail.pending.hint':
+      'Las mediciones fueron guardadas correctamente. La zona (Azul / Verde / Amarillo / Rojo) sólo se muestra cuando el servidor autoritativo la clasifica.',
+    'detail.resync': 'Reintentar sincronización',
+    'detail.resync.error': 'No se pudo reintentar la sincronización.',
+    'detail.celebrate': '¡Alcanzaste tu zona objetivo! Excelente recuperación.',
+    'detail.metric.hrr.hint': 'Caída 1 min',
+    'detail.metric.recpct.hint': 'Recuperación 3 min',
+    'detail.metric.aurc.hint': 'Área bajo curva',
+    'detail.metric.tau.hint': 'Cinética',
+    'detail.ref.rhr': 'FCr',
+    'detail.ref.peak': 'FC pico',
+    'detail.ref.fcp': 'FCP objetivo',
+    'detail.ref.age': 'Edad',
+    'detail.ref.age.unit': 'años',
+    'detail.fcpv.sleep': 'Sueño',
+    'detail.fcpv.hydration': 'Hidratación',
+    'detail.fcpv.symptoms': 'Síntomas',
+    'detail.fcpv.illness': 'Enfermedad reciente',
+    'detail.fcpv.load': 'Carga subjetiva',
+    'detail.fcpv.total': 'TOTAL',
+    'detail.contextFlag':
+      'Contexto elevado. Considera atenuar la carga aun si la zona calculada es favorable.',
+    'detail.disclaimer':
+      'No es una aplicación de diagnóstico médico. AFE™ Safety Check apoya decisiones preventivas y no sustituye la evaluación profesional. Ante síntomas preocupantes, detén la actividad y sigue los protocolos de seguridad correspondientes.',
+    'detail.delete.confirm':
+      '¿Eliminar esta evaluación? Esta acción no se puede deshacer.',
+    'detail.home': 'Volver al inicio',
+    'detail.share.web':
+      'La exportación no está disponible en la vista previa web. Prueba en Expo Go o en el build nativo.',
+    'detail.share.error': 'No se pudo compartir el resultado.',
+    'detail.share.unavailable': 'Compartir no está disponible en este dispositivo.',
+    'detail.share.prepareErr': 'No se pudo preparar la imagen.',
+    'detail.share.title': 'Compartir resultado AFE™',
+
+    'guide.eyebrow': 'GUÍA VISUAL AFE™',
+    'guide.title': 'Interpretación por color',
+    'guide.subtitle':
+      'Clasificación guiada basada en la evaluación fisiológica del día.',
+    'guide.footer': '¿QUÉ SIGNIFICA ESTA GUÍA?',
+    'guide.h1': 'Apoya la toma de decisiones preventivas.',
+    'guide.h2': 'No es una aplicación de diagnóstico médico.',
+    'guide.h3': 'Debe interpretarse junto con el contexto del atleta.',
+
+    'zone.BLUE.label': 'Azul · Óptimo',
+    'zone.GREEN.label': 'Verde · Favorable',
+    'zone.YELLOW.label': 'Amarillo · Precaución',
+    'zone.RED.label': 'Rojo · Alerta',
+    'zone.BLUE.short': 'AZUL',
+    'zone.GREEN.short': 'VERDE',
+    'zone.YELLOW.short': 'AMARILLO',
+    'zone.RED.short': 'ROJO',
+    'zone.BLUE.desc':
+      'Estado muy favorable. Recuperación cardiaca excelente y respuesta positiva general.',
+    'zone.GREEN.desc':
+      'Estado favorable. Condición adecuada para entrenar o continuar normalmente.',
+    'zone.YELLOW.desc':
+      'Estado de precaución. Observa el contexto y ajusta la carga si es necesario.',
+    'zone.RED.desc':
+      'Estado de alerta. Considera revisión profesional antes de esfuerzos exigentes.',
+
+    'pattern.RAPID': 'Rápida',
+    'pattern.NORMAL': 'Normal',
+    'pattern.DELAYED': 'Lenta',
+    'pattern.FLATTENED': 'Meseta',
+    'pattern.UNSTABLE': 'Inestable',
+  },
+} as const;
+
+type Key = keyof typeof dict.en;
+
+type I18nCtx = {
+  lang: Lang;
+  setLang: (l: Lang) => Promise<void>;
+  toggle: () => Promise<void>;
+  t: (k: Key, params?: Record<string, string | number>) => string;
+  ready: boolean;
+  // Locale helpers
+  formatDate: (iso: string, opts?: Intl.DateTimeFormatOptions) => string;
+  formatTime: (iso: string) => string;
+  formatDateTime: (iso: string) => string;
+};
+
+const Ctx = createContext<I18nCtx | null>(null);
+
+function detectInitial(): Lang {
+  try {
+    const locales = Localization.getLocales?.();
+    const raw = (locales && locales[0]?.languageCode) || 'en';
+    return raw?.toLowerCase().startsWith('es') ? 'es' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>('en');
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const stored = (await AsyncStorage.getItem(STORAGE_KEY)) as Lang | null;
+      if (stored === 'en' || stored === 'es') {
+        setLangState(stored);
+      } else {
+        setLangState(detectInitial());
+      }
+      setReady(true);
+    })();
+  }, []);
+
+  const setLang = useCallback(async (l: Lang) => {
+    await AsyncStorage.setItem(STORAGE_KEY, l);
+    setLangState(l);
+  }, []);
+
+  const toggle = useCallback(async () => {
+    const next: Lang = lang === 'en' ? 'es' : 'en';
+    await setLang(next);
+  }, [lang, setLang]);
+
+  const t = useCallback(
+    (k: Key, params?: Record<string, string | number>) => {
+      const s: string = (dict[lang][k] as string) ?? (dict.en[k] as string) ?? k;
+      if (!params) return s;
+      return Object.keys(params).reduce(
+        (acc, key) => acc.replace(new RegExp(`\\{${key}\\}`, 'g'), String(params[key])),
+        s
+      );
+    },
+    [lang]
+  );
+
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+
+  const formatDate = useCallback(
+    (iso: string, opts?: Intl.DateTimeFormatOptions) => {
+      const d = new Date(iso);
+      return d.toLocaleDateString(locale, opts ?? {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    },
+    [locale]
+  );
+
+  const formatTime = useCallback(
+    (iso: string) => new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+    [locale]
+  );
+
+  const formatDateTime = useCallback(
+    (iso: string) => `${formatDate(iso)} · ${formatTime(iso)}`,
+    [formatDate, formatTime]
+  );
+
+  const value = useMemo(
+    () => ({ lang, setLang, toggle, t, ready, formatDate, formatTime, formatDateTime }),
+    [lang, setLang, toggle, t, ready, formatDate, formatTime, formatDateTime]
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useI18n(): I18nCtx {
+  const c = useContext(Ctx);
+  if (!c) throw new Error('useI18n must be used inside I18nProvider');
+  return c;
+}
+
+/**
+ * Localized zone/pattern helpers. Import and call with the current `t`.
+ * Kept as free functions so they can be used inside any component/screen.
+ */
+export function zoneLabelI18n(
+  t: I18nCtx['t'],
+  z: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED'
+): string {
+  return t(`zone.${z}.label` as Key);
+}
+export function zoneShortI18n(
+  t: I18nCtx['t'],
+  z: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED'
+): string {
+  return t(`zone.${z}.short` as Key);
+}
+export function zoneDescI18n(
+  t: I18nCtx['t'],
+  z: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED'
+): string {
+  return t(`zone.${z}.desc` as Key);
+}
+export function patternLabelI18n(
+  t: I18nCtx['t'],
+  p: 'RAPID' | 'NORMAL' | 'DELAYED' | 'FLATTENED' | 'UNSTABLE'
+): string {
+  return t(`pattern.${p}` as Key);
+}

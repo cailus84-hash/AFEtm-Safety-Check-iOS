@@ -19,29 +19,20 @@ import ConfettiCannon from 'react-native-confetti-cannon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Assessment, deleteAssessment, fetchProfile, getAssessment, getDeviceId, resyncAssessment, UpstreamError } from '@/src/lib/api';
 import { RecoveryChart } from '@/src/components/RecoveryChart';
+import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';
 import {
-  colors,
-  radius,
-  shared,
-  spacing,
-  zoneColor,
-  zoneLabel,
-  zoneDescription,
-  patternLabel,
-} from '@/src/lib/theme';
+  useI18n,
+  zoneLabelI18n,
+  zoneDescI18n,
+  patternLabelI18n,
+} from '@/src/lib/i18n';
 
 const TIMES = ['0', '60', '90', '120', '150', '180'];
-
-function fmt(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-ES', {
-    day: '2-digit', month: 'long', year: 'numeric',
-  }) + ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-}
 
 export default function AssessmentDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { t, formatDateTime, lang } = useI18n();
   const { width } = useWindowDimensions();
   const [a, setA] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +53,6 @@ export default function AssessmentDetail() {
         const assessment = await getAssessment(id);
         setA(assessment);
 
-        // Zona objetivo — only meaningful when authoritative classification exists.
         if (!assessment.zone) return;
         const deviceId = await getDeviceId();
         const profile = await fetchProfile(deviceId).catch(() => null);
@@ -96,7 +86,7 @@ export default function AssessmentDetail() {
           `HTTP ${e.upstream_status} · ${e.upstream_body?.slice(0, 240) || e.message}`
         );
       } else {
-        setResyncErr(e?.message || 'No se pudo reintentar la sincronización.');
+        setResyncErr(e?.message || t('detail.resync.error'));
       }
     } finally {
       setResyncing(false);
@@ -119,11 +109,11 @@ export default function AssessmentDetail() {
     setSharing(true);
     try {
       if (Platform.OS === 'web') {
-        setShareErr('La exportación no está disponible en la vista previa web. Prueba en Expo Go o en el build nativo.');
+        setShareErr(t('detail.share.web'));
         return;
       }
       if (!shareRef.current) {
-        setShareErr('No se pudo preparar la imagen.');
+        setShareErr(t('detail.share.prepareErr'));
         return;
       }
       const uri = await captureRef(shareRef, {
@@ -133,15 +123,15 @@ export default function AssessmentDetail() {
       });
       const available = await Sharing.isAvailableAsync();
       if (!available) {
-        setShareErr('Compartir no está disponible en este dispositivo.');
+        setShareErr(t('detail.share.unavailable'));
         return;
       }
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
-        dialogTitle: 'Compartir resultado AFE™',
+        dialogTitle: t('detail.share.title'),
       });
     } catch (e: any) {
-      setShareErr(e?.message || 'No se pudo compartir el resultado.');
+      setShareErr(e?.message || t('detail.share.error'));
     } finally {
       setSharing(false);
     }
@@ -159,9 +149,9 @@ export default function AssessmentDetail() {
     return (
       <SafeAreaView style={shared.screen}>
         <View style={{ padding: spacing.xl }}>
-          <Text style={shared.h2}>Evaluación no encontrada</Text>
+          <Text style={shared.h2}>{t('detail.notFound')}</Text>
           <Pressable style={[shared.primaryBtn, { marginTop: spacing.lg }]} onPress={() => router.replace('/(tabs)')}>
-            <Text style={shared.primaryBtnText}>Volver</Text>
+            <Text style={shared.primaryBtnText}>{t('detail.back')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -190,7 +180,7 @@ export default function AssessmentDetail() {
         <Pressable onPress={() => router.back()} testID="detail-back-btn" style={styles.iconBtn}>
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.topTitle}>Resultado</Text>
+        <Text style={styles.topTitle}>{t('detail.title')}</Text>
         <View style={{ flexDirection: 'row' }}>
           <Pressable
             onPress={share}
@@ -215,14 +205,12 @@ export default function AssessmentDetail() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
-        {/* Capture region: zone banner + chart bundle → what we export */}
         <ViewShot
           ref={shareRef}
           options={{ format: 'png', quality: 1 }}
           style={styles.shareRegion}
           testID="detail-share-region"
         >
-          {/* Zone banner (only when authoritative classification exists) */}
           {!pending ? (
             <View
               style={[styles.banner, { borderColor: color, shadowColor: color }]}
@@ -244,18 +232,18 @@ export default function AssessmentDetail() {
                   color={color}
                 />
               </View>
-              <Text style={styles.bannerEyebrow}>ZONA AFE</Text>
-              <Text style={[styles.bannerZone, { color }]}>{zoneLabel(a.zone!)}</Text>
-              <Text style={styles.bannerDesc}>{zoneDescription(a.zone!)}</Text>
+              <Text style={styles.bannerEyebrow}>{t('detail.zone.eyebrow')}</Text>
+              <Text style={[styles.bannerZone, { color }]}>{zoneLabelI18n(t, a.zone!)}</Text>
+              <Text style={styles.bannerDesc}>{zoneDescI18n(t, a.zone!)}</Text>
               <View style={styles.bannerRow}>
                 <View style={styles.bannerChip}>
-                  <Text style={styles.bannerChipLabel}>PATRÓN</Text>
+                  <Text style={styles.bannerChipLabel}>{t('detail.chip.pattern')}</Text>
                   <Text style={styles.bannerChipValue}>
-                    {a.pattern ? patternLabel(a.pattern) : '—'}
+                    {a.pattern ? patternLabelI18n(t, a.pattern) : '—'}
                   </Text>
                 </View>
                 <View style={styles.bannerChip}>
-                  <Text style={styles.bannerChipLabel}>ACCIÓN</Text>
+                  <Text style={styles.bannerChipLabel}>{t('detail.chip.action')}</Text>
                   <Text style={styles.bannerChipValue}>{a.action ?? '—'}</Text>
                 </View>
               </View>
@@ -265,17 +253,12 @@ export default function AssessmentDetail() {
               <View style={styles.pendingIconWrap}>
                 <MaterialCommunityIcons name="cloud-sync-outline" size={28} color={colors.brandGold} />
               </View>
-              <Text style={styles.pendingEyebrow}>ESTADO</Text>
-              <Text style={styles.pendingTitle}>Pendiente de sincronización</Text>
+              <Text style={styles.pendingEyebrow}>{t('detail.pending.eyebrow')}</Text>
+              <Text style={styles.pendingTitle}>{t('detail.pending.title')}</Text>
               <Text style={styles.pendingDesc}>
-                {a.calc_notice ||
-                  'Resultado pendiente de sincronización con el motor oficial AFEtm.'}
+                {a.calc_notice || t('detail.pending.desc')}
               </Text>
-              <Text style={styles.pendingHint}>
-                Las mediciones fueron guardadas correctamente. La zona (Azul /
-                Verde / Amarillo / Rojo) sólo se muestra cuando el servidor
-                autoritativo la clasifica.
-              </Text>
+              <Text style={styles.pendingHint}>{t('detail.pending.hint')}</Text>
               <Pressable
                 testID="detail-resync-btn"
                 onPress={doResync}
@@ -287,7 +270,7 @@ export default function AssessmentDetail() {
                 ) : (
                   <>
                     <MaterialCommunityIcons name="refresh" size={16} color="#000" />
-                    <Text style={styles.resyncBtnText}>Reintentar sincronización</Text>
+                    <Text style={styles.resyncBtnText}>{t('detail.resync')}</Text>
                   </>
                 )}
               </Pressable>
@@ -299,19 +282,16 @@ export default function AssessmentDetail() {
             </View>
           )}
 
-          <Text style={styles.date}>{fmt(a.created_at)}</Text>
+          <Text style={styles.date}>{formatDateTime(a.created_at)}</Text>
 
           {targetMet && !pending && (
             <View style={styles.celebrateBanner} testID="celebrate-banner">
               <MaterialCommunityIcons name="trophy" size={20} color={colors.brandGold} />
-              <Text style={styles.celebrateText}>
-                ¡Alcanzaste tu zona objetivo! Excelente recuperación.
-              </Text>
+              <Text style={styles.celebrateText}>{t('detail.celebrate')}</Text>
             </View>
           )}
 
-          {/* Recovery curve chart */}
-          <Text style={styles.sectionTitle}>Curva de recuperación</Text>
+          <Text style={styles.sectionTitle}>{t('detail.section.chart')}</Text>
           <View testID="result-recovery-chart" style={{ alignItems: 'center' }}>
             <RecoveryChart
               readings={a.readings}
@@ -331,74 +311,61 @@ export default function AssessmentDetail() {
           <Text style={styles.shareErr} testID="detail-share-error">{shareErr}</Text>
         ) : null}
 
-        {/* Metrics grid */}
-        <Text style={styles.sectionTitle}>Métricas de recuperación</Text>
+        <Text style={styles.sectionTitle}>{t('detail.section.metrics')}</Text>
         <View style={styles.metricsGrid}>
-          <Metric label="HRR" value={`${a.hrr}`} unit="bpm" hint="Caída 1 min" />
-          <Metric label="RECpct" value={`${a.recpct}`} unit="%" hint="Recuperación 3 min" />
-          <Metric label="AURC" value={`${a.aurc}`} unit="" hint="Área bajo curva" />
-          <Metric label="τ (tau)" value={`${a.tau}`} unit="s" hint="Cinética" />
+          <Metric label="HRR" value={`${a.hrr}`} unit="bpm" hint={t('detail.metric.hrr.hint')} />
+          <Metric label="RECpct" value={`${a.recpct}`} unit="%" hint={t('detail.metric.recpct.hint')} />
+          <Metric label="AURC" value={`${a.aurc}`} unit="" hint={t('detail.metric.aurc.hint')} />
+          <Metric label="τ (tau)" value={`${a.tau}`} unit="s" hint={t('detail.metric.tau.hint')} />
         </View>
 
-        {/* Reference */}
-        <Text style={styles.sectionTitle}>Datos de referencia</Text>
+        <Text style={styles.sectionTitle}>{t('detail.section.reference')}</Text>
         <View style={styles.refGrid}>
-          <RefItem label="FCr" value={`${a.fcr}`} unit="bpm" />
-          <RefItem label="FC pico" value={`${a.hr_peak}`} unit="bpm" />
-          <RefItem label="FCP objetivo" value={`${a.fcp_target}`} unit="bpm" />
-          <RefItem label="Edad" value={`${a.age}`} unit="años" />
+          <RefItem label={t('detail.ref.rhr')} value={`${a.fcr}`} unit="bpm" />
+          <RefItem label={t('detail.ref.peak')} value={`${a.hr_peak}`} unit="bpm" />
+          <RefItem label={t('detail.ref.fcp')} value={`${a.fcp_target}`} unit="bpm" />
+          <RefItem label={t('detail.ref.age')} value={`${a.age}`} unit={t('detail.ref.age.unit')} />
         </View>
 
-        {/* Curve readings */}
-        <Text style={styles.sectionTitle}>Lecturas por checkpoint</Text>
+        <Text style={styles.sectionTitle}>{t('detail.section.readings')}</Text>
         <View style={styles.curveWrap}>
-          {TIMES.map((t) => (
-            <View key={t} style={styles.curveItem}>
-              <Text style={styles.curveTime}>{t}s</Text>
-              <Text style={styles.curveHr}>{a.readings[t]}</Text>
+          {TIMES.map((tm) => (
+            <View key={tm} style={styles.curveItem}>
+              <Text style={styles.curveTime}>{tm}s</Text>
+              <Text style={styles.curveHr}>{a.readings[tm]}</Text>
               <Text style={styles.curveUnit}>bpm</Text>
             </View>
           ))}
         </View>
 
-        {/* FCPv */}
-        <Text style={styles.sectionTitle}>Contexto preventivo (FCPv)</Text>
+        <Text style={styles.sectionTitle}>{t('detail.section.context')}</Text>
         <View style={[shared.card, { padding: spacing.md }]}>
-          <FcpvRow label="Sueño" value={a.fcpv.sleep} />
-          <FcpvRow label="Hidratación" value={a.fcpv.hydration} />
-          <FcpvRow label="Síntomas" value={a.fcpv.symptoms} />
-          <FcpvRow label="Enfermedad reciente" value={a.fcpv.recent_illness} />
-          <FcpvRow label="Carga subjetiva" value={a.fcpv.subjective_load} />
+          <FcpvRow label={t('detail.fcpv.sleep')} value={a.fcpv.sleep} />
+          <FcpvRow label={t('detail.fcpv.hydration')} value={a.fcpv.hydration} />
+          <FcpvRow label={t('detail.fcpv.symptoms')} value={a.fcpv.symptoms} />
+          <FcpvRow label={t('detail.fcpv.illness')} value={a.fcpv.recent_illness} />
+          <FcpvRow label={t('detail.fcpv.load')} value={a.fcpv.subjective_load} />
           <View style={styles.fcpvTotalRow}>
-            <Text style={styles.fcpvTotalLabel}>TOTAL</Text>
+            <Text style={styles.fcpvTotalLabel}>{t('detail.fcpv.total')}</Text>
             <Text style={styles.fcpvTotalValue}>{a.fcpv_total} / 10</Text>
           </View>
           {a.context_flag ? (
             <View style={styles.contextFlag}>
               <MaterialCommunityIcons name="alert-outline" size={14} color={colors.zoneYellow} />
-              <Text style={styles.contextFlagText}>
-                Contexto elevado. Considera atenuar la carga aun si la zona
-                calculada es favorable.
-              </Text>
+              <Text style={styles.contextFlagText}>{t('detail.contextFlag')}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* Disclaimer */}
         <View style={styles.disclaimer} testID="result-disclaimer">
           <MaterialCommunityIcons name="information-outline" size={16} color={colors.onSurfaceTertiary} />
-          <Text style={styles.disclaimerText}>
-            No es una aplicación de diagnóstico médico. AFE™ Safety Check
-            apoya decisiones preventivas y no sustituye la evaluación
-            profesional. Ante síntomas preocupantes, detén la actividad y
-            sigue los protocolos de seguridad correspondientes.
-          </Text>
+          <Text style={styles.disclaimerText}>{t('detail.disclaimer')}</Text>
         </View>
 
         {confirmDel ? (
           <View style={styles.deleteBox}>
             <Text style={[shared.body, { marginBottom: spacing.md }]}>
-              ¿Eliminar esta evaluación? Esta acción no se puede deshacer.
+              {t('detail.delete.confirm')}
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <Pressable
@@ -406,7 +373,7 @@ export default function AssessmentDetail() {
                 onPress={() => setConfirmDel(false)}
                 testID="detail-delete-cancel"
               >
-                <Text style={shared.secondaryBtnText}>Cancelar</Text>
+                <Text style={shared.secondaryBtnText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 testID="detail-delete-confirm"
@@ -415,7 +382,7 @@ export default function AssessmentDetail() {
                 onPress={remove}
               >
                 {deleting ? <ActivityIndicator color="#fff" /> : (
-                  <Text style={[shared.primaryBtnText, { color: '#fff' }]}>Eliminar</Text>
+                  <Text style={[shared.primaryBtnText, { color: '#fff' }]}>{t('common.delete')}</Text>
                 )}
               </Pressable>
             </View>
@@ -429,7 +396,7 @@ export default function AssessmentDetail() {
           style={({ pressed }) => [shared.primaryBtn, pressed && { opacity: 0.9 }]}
           onPress={() => router.replace('/(tabs)')}
         >
-          <Text style={shared.primaryBtnText}>Volver al inicio</Text>
+          <Text style={shared.primaryBtnText}>{t('detail.home')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -494,18 +461,14 @@ const styles = StyleSheet.create({
   topTitle: { color: colors.onSurface, fontSize: 15, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   banner: {
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    padding: spacing.xl,
+    borderRadius: radius.lg, borderWidth: 2, padding: spacing.xl,
     backgroundColor: colors.surfaceSecondary,
     shadowOpacity: 0.7, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
-    elevation: 10,
-    overflow: 'hidden',
+    elevation: 10, overflow: 'hidden',
   },
   bannerIcon: {
     width: 52, height: 52, borderRadius: 26,
-    borderWidth: 2,
-    backgroundColor: colors.surface,
+    borderWidth: 2, backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',
     shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6,
     marginBottom: spacing.md,
@@ -524,8 +487,7 @@ const styles = StyleSheet.create({
   bannerChipValue: { color: colors.onSurface, fontSize: 14, fontWeight: '800', marginTop: 4 },
   date: {
     color: colors.onSurfaceTertiary, fontSize: 12,
-    textAlign: 'center', marginTop: spacing.lg,
-    letterSpacing: 0.5,
+    textAlign: 'center', marginTop: spacing.lg, letterSpacing: 0.5,
   },
   sectionTitle: {
     color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700',
@@ -533,8 +495,7 @@ const styles = StyleSheet.create({
   },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   metric: {
-    width: '48%',
-    padding: spacing.md,
+    width: '48%', padding: spacing.md,
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
   },
@@ -544,8 +505,7 @@ const styles = StyleSheet.create({
   metricHint: { color: colors.onSurfaceTertiary, fontSize: 10, marginTop: 4 },
   refGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   refItem: {
-    flexGrow: 1, minWidth: '47%',
-    padding: spacing.sm + 2,
+    flexGrow: 1, minWidth: '47%', padding: spacing.sm + 2,
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
   },
@@ -554,9 +514,7 @@ const styles = StyleSheet.create({
   refUnit: { color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: '600' },
   curveWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   curveItem: {
-    width: '31%',
-    alignItems: 'center',
-    padding: spacing.sm,
+    width: '31%', alignItems: 'center', padding: spacing.sm,
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
   },
@@ -579,8 +537,7 @@ const styles = StyleSheet.create({
   fcpvTotalValue: { color: colors.onSurface, fontSize: 18, fontWeight: '900' },
   contextFlag: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.sm,
+    marginTop: spacing.md, padding: spacing.sm,
     borderRadius: radius.sm,
     borderWidth: 1, borderColor: colors.zoneYellow,
     backgroundColor: '#1F1A0A',
@@ -588,8 +545,7 @@ const styles = StyleSheet.create({
   contextFlagText: { color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 15, flex: 1 },
   disclaimer: {
     flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
-    marginTop: spacing.xl,
-    padding: spacing.md,
+    marginTop: spacing.xl, padding: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
     borderWidth: 1, borderColor: colors.border,
@@ -607,8 +563,7 @@ const styles = StyleSheet.create({
   shareErr: { color: colors.zoneRed, fontSize: 12, fontWeight: '600', marginTop: spacing.sm },
   celebrateBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.md,
+    marginTop: spacing.md, padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.brandGold,
     backgroundColor: '#1F1B10',
@@ -618,27 +573,13 @@ const styles = StyleSheet.create({
   celebrateText: {
     color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 0.3, flex: 1,
   },
-  calcSourceBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.zoneYellow,
-    backgroundColor: '#1F1A0A',
-  },
-  calcSourceText: {
-    color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 15, flex: 1,
-  },
   pendingBanner: {
     borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.brandGold,
-    borderStyle: 'dashed',
+    borderWidth: 2, borderColor: colors.brandGold, borderStyle: 'dashed',
     backgroundColor: colors.surfaceSecondary,
     padding: spacing.xl,
     shadowColor: colors.brandGold,
-    shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
-    elevation: 5,
+    shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 5,
     alignItems: 'flex-start',
   },
   pendingIconWrap: {
@@ -663,22 +604,17 @@ const styles = StyleSheet.create({
   },
   resyncBtnText: { color: '#000', fontSize: 14, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
   resyncErr: {
-    color: colors.zoneRed,
-    fontSize: 11,
-    marginTop: spacing.sm,
-    lineHeight: 15,
+    color: colors.zoneRed, fontSize: 11, marginTop: spacing.sm, lineHeight: 15,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   deleteBox: {
-    marginTop: spacing.xl,
-    padding: spacing.md,
+    marginTop: spacing.xl, padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1, borderColor: colors.zoneRed,
     backgroundColor: '#1A0A0A',
   },
   footer: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
+    padding: spacing.xl, paddingTop: spacing.md,
     borderTopWidth: 1, borderTopColor: colors.divider,
     backgroundColor: colors.surface,
   },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,16 +14,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { fetchProfile, getDeviceId, saveProfile } from '@/src/lib/api';
+import { useI18n } from '@/src/lib/i18n';
 
-const SPORTS = ['Running', 'Ciclismo', 'Fútbol', 'CrossFit', 'Natación', 'Otro'];
+const SPORT_KEYS = ['running', 'cycling', 'football', 'crossfit', 'swimming', 'other'] as const;
+// Canonical (English) values stored in the backend.
+const SPORT_CANONICAL: Record<(typeof SPORT_KEYS)[number], string> = {
+  running: 'Running',
+  cycling: 'Cycling',
+  football: 'Football',
+  crossfit: 'CrossFit',
+  swimming: 'Swimming',
+  other: 'Other',
+};
 
 export default function ProfileSetup() {
   const router = useRouter();
+  const { t } = useI18n();
   const [deviceId, setDeviceId] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
-  const [sport, setSport] = useState<string>('Running');
+  const [sport, setSport] = useState<string>(SPORT_CANONICAL.running);
   const [targetZone, setTargetZone] = useState<'NONE' | 'GREEN' | 'BLUE'>('NONE');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,13 +56,22 @@ export default function ProfileSetup() {
     })();
   }, []);
 
+  const sportLabelFor = useMemo(
+    () => (canonical: string) => {
+      const key = (SPORT_KEYS.find((k) => SPORT_CANONICAL[k] === canonical) || 'other') as
+        | 'running' | 'cycling' | 'football' | 'crossfit' | 'swimming' | 'other';
+      return t(`sport.${key}` as any);
+    },
+    [t]
+  );
+
   const submit = async () => {
     setError(null);
     const ageN = parseInt(age, 10);
     const weightN = parseFloat(weight);
-    if (!name.trim()) return setError('Ingresa tu nombre.');
-    if (!ageN || ageN < 10 || ageN > 90) return setError('Edad debe ser entre 10 y 90.');
-    if (!weightN || weightN < 20 || weightN > 250) return setError('Peso debe ser entre 20 y 250 kg.');
+    if (!name.trim()) return setError(t('setup.error.name'));
+    if (!ageN || ageN < 10 || ageN > 90) return setError(t('setup.error.age'));
+    if (!weightN || weightN < 20 || weightN > 250) return setError(t('setup.error.weight'));
 
     setSaving(true);
     try {
@@ -65,7 +85,7 @@ export default function ProfileSetup() {
       });
       router.replace('/(tabs)');
     } catch (e: any) {
-      setError(e?.message || 'No se pudo guardar el perfil.');
+      setError(e?.message || t('setup.error.save'));
     } finally {
       setSaving(false);
     }
@@ -81,30 +101,21 @@ export default function ProfileSetup() {
 
   return (
     <SafeAreaView style={shared.screen} edges={['top', 'bottom']} testID="profile-setup-screen">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.eyebrow}>PASO 1 DE 1</Text>
-          <Text style={shared.h1}>Perfil del atleta</Text>
-          <Text style={[shared.body, { marginTop: spacing.sm }]}>
-            Ingresa tus datos base. Los usaremos para calcular tu Frecuencia
-            Cardiaca Pico objetivo.
-          </Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.eyebrow}>{t('setup.eyebrow')}</Text>
+          <Text style={shared.h1}>{t('setup.title')}</Text>
+          <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('setup.subtitle')}</Text>
 
           <View style={{ marginTop: spacing.xl, gap: spacing.lg }}>
             <View>
-              <Text style={shared.label}>Nombre</Text>
+              <Text style={shared.label}>{t('setup.field.name')}</Text>
               <TextInput
                 testID="profile-name-input"
                 style={shared.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="Tu nombre"
+                placeholder={t('setup.field.name.ph')}
                 placeholderTextColor={colors.onSurfaceTertiary}
                 autoCapitalize="words"
               />
@@ -112,24 +123,24 @@ export default function ProfileSetup() {
 
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Text style={shared.label}>Edad</Text>
+                <Text style={shared.label}>{t('setup.field.age')}</Text>
                 <TextInput
                   testID="profile-age-input"
                   style={shared.input}
                   value={age}
-                  onChangeText={(t) => setAge(t.replace(/[^0-9]/g, ''))}
+                  onChangeText={(txt) => setAge(txt.replace(/[^0-9]/g, ''))}
                   keyboardType="number-pad"
                   placeholder="30"
                   placeholderTextColor={colors.onSurfaceTertiary}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={shared.label}>Peso (kg)</Text>
+                <Text style={shared.label}>{t('setup.field.weight')}</Text>
                 <TextInput
                   testID="profile-weight-input"
                   style={shared.input}
                   value={weight}
-                  onChangeText={(t) => setWeight(t.replace(/[^0-9.]/g, ''))}
+                  onChangeText={(txt) => setWeight(txt.replace(/[^0-9.]/g, ''))}
                   keyboardType="decimal-pad"
                   placeholder="70"
                   placeholderTextColor={colors.onSurfaceTertiary}
@@ -138,22 +149,23 @@ export default function ProfileSetup() {
             </View>
 
             <View>
-              <Text style={shared.label}>Deporte</Text>
+              <Text style={shared.label}>{t('setup.field.sport')}</Text>
               <View style={styles.chipsWrap}>
-                {SPORTS.map((s) => {
-                  const active = sport === s;
+                {SPORT_KEYS.map((k) => {
+                  const value = SPORT_CANONICAL[k];
+                  const active = sport === value;
                   return (
                     <Pressable
-                      key={s}
-                      testID={`profile-sport-${s.toLowerCase()}`}
-                      onPress={() => setSport(s)}
+                      key={k}
+                      testID={`profile-sport-${k}`}
+                      onPress={() => setSport(value)}
                       style={[
                         styles.chip,
                         active && { borderColor: colors.brandGold, backgroundColor: '#1F1B10' },
                       ]}
                     >
                       <Text style={[styles.chipText, active && { color: colors.brandGold }]}>
-                        {s}
+                        {sportLabelFor(value)}
                       </Text>
                     </Pressable>
                   );
@@ -162,15 +174,15 @@ export default function ProfileSetup() {
             </View>
 
             <View>
-              <Text style={shared.label}>Zona objetivo (opcional)</Text>
+              <Text style={shared.label}>{t('setup.field.target')}</Text>
               <Text style={[shared.muted, { marginBottom: spacing.sm }]}>
-                Al alcanzar o superar esta zona en un chequeo, lo celebraremos contigo.
+                {t('setup.field.target.hint')}
               </Text>
               <View style={styles.chipsWrap}>
                 {([
-                  { key: 'NONE', label: 'Ninguna', color: colors.onSurfaceTertiary },
-                  { key: 'GREEN', label: 'Verde · Favorable', color: colors.zoneGreen },
-                  { key: 'BLUE', label: 'Azul · Óptimo', color: colors.zoneBlue },
+                  { key: 'NONE', label: t('setup.target.none'), color: colors.onSurfaceTertiary },
+                  { key: 'GREEN', label: t('setup.target.green'), color: colors.zoneGreen },
+                  { key: 'BLUE', label: t('setup.target.blue'), color: colors.zoneBlue },
                 ] as const).map((opt) => {
                   const active = targetZone === opt.key;
                   return (
@@ -220,16 +232,11 @@ export default function ProfileSetup() {
           <Pressable
             testID="profile-save-btn"
             disabled={saving}
-            style={({ pressed }) => [
-              shared.primaryBtn,
-              (pressed || saving) && { opacity: 0.85 },
-            ]}
+            style={({ pressed }) => [shared.primaryBtn, (pressed || saving) && { opacity: 0.85 }]}
             onPress={submit}
           >
-            {saving ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={shared.primaryBtnText}>Guardar perfil</Text>
+            {saving ? <ActivityIndicator color="#000" /> : (
+              <Text style={shared.primaryBtnText}>{t('setup.save')}</Text>
             )}
           </Pressable>
         </View>
@@ -241,34 +248,21 @@ export default function ProfileSetup() {
 const styles = StyleSheet.create({
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   eyebrow: {
-    color: colors.brandGold,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
+    color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700', marginBottom: spacing.sm,
   },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.surfaceTertiary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 2,
     borderRadius: radius.pill,
   },
   chipText: { color: colors.onSurfaceSecondary, fontSize: 13, fontWeight: '600' },
-  error: {
-    color: colors.zoneRed,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  error: { color: colors.zoneRed, fontSize: 13, fontWeight: '600' },
   footer: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
+    padding: spacing.xl, paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.divider,
     backgroundColor: colors.surface,
   },
 });

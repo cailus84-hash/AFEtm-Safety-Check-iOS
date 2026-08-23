@@ -16,29 +16,15 @@ import {
   getDeviceId,
   listAssessments,
 } from '@/src/lib/api';
-import {
-  colors,
-  radius,
-  shared,
-  spacing,
-  zoneColor,
-  zoneLabel,
-  patternLabel,
-} from '@/src/lib/theme';
+import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';
+import { useI18n, zoneShortI18n, patternLabelI18n } from '@/src/lib/i18n';
 
 const FILTERS = ['ALL', 'BLUE', 'GREEN', 'YELLOW', 'RED'] as const;
 type Filter = (typeof FILTERS)[number];
 
-function fmt(iso: string) {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }),
-    time: d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-  };
-}
-
 export default function History() {
   const router = useRouter();
+  const { t, formatDate, formatTime } = useI18n();
   const [items, setItems] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +55,7 @@ export default function History() {
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 2) return [prev[1], id]; // keep the 2 most recent picks
+      if (prev.length >= 2) return [prev[1], id];
       return [...prev, id];
     });
   };
@@ -83,11 +69,10 @@ export default function History() {
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="history-screen">
-      {/* Sticky header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>REGISTRO</Text>
-          <Text style={shared.h2}>Historial</Text>
+          <Text style={styles.eyebrow}>{t('history.eyebrow')}</Text>
+          <Text style={shared.h2}>{t('history.title')}</Text>
         </View>
         <Pressable
           testID="history-compare-toggle"
@@ -108,12 +93,11 @@ export default function History() {
               compareMode && { color: colors.brandGold },
             ]}
           >
-            {compareMode ? 'Salir' : 'Comparar'}
+            {compareMode ? t('history.exit') : t('history.compare')}
           </Text>
         </Pressable>
       </View>
 
-      {/* Sticky chip row */}
       <View style={styles.chipRowWrap}>
         <ScrollView
           horizontal
@@ -122,8 +106,7 @@ export default function History() {
         >
           {FILTERS.map((f) => {
             const active = filter === f;
-            const label =
-              f === 'ALL' ? 'Todas' : zoneLabel(f as any).split(' · ')[0];
+            const label = f === 'ALL' ? t('history.filter.all') : zoneShortI18n(t, f as any);
             const color = f === 'ALL' ? colors.brandGold : zoneColor(f as any);
             return (
               <Pressable
@@ -136,9 +119,7 @@ export default function History() {
                 ]}
               >
                 {f !== 'ALL' && (
-                  <View
-                    style={[styles.chipDot, { backgroundColor: color, shadowColor: color }]}
-                  />
+                  <View style={[styles.chipDot, { backgroundColor: color, shadowColor: color }]} />
                 )}
                 <Text style={[styles.chipText, active && { color }]}>{label}</Text>
               </Pressable>
@@ -166,19 +147,18 @@ export default function History() {
             <View style={styles.empty} testID="history-empty">
               <MaterialCommunityIcons name="clipboard-pulse-outline" size={48} color={colors.onSurfaceTertiary} />
               <Text style={[shared.h3, { marginTop: spacing.md, textAlign: 'center' }]}>
-                No hay historial disponible
+                {t('history.empty.title')}
               </Text>
               <Text style={[shared.body, { textAlign: 'center', marginTop: spacing.sm }]}>
-                Realiza tu primer Safety Check y tus evaluaciones aparecerán aquí.
+                {t('history.empty.body')}
               </Text>
             </View>
           ) : (
             <View style={{ gap: spacing.md }}>
               {filtered.map((a) => {
-                const { date, time } = fmt(a.created_at);
                 const isPending = !a.zone;
                 const color = isPending ? colors.brandGold : zoneColor(a.zone!);
-                const label = isPending ? 'Pendiente' : zoneLabel(a.zone!);
+                const label = isPending ? t('common.pending') : zoneShortI18n(t, a.zone!);
                 const isSelected = selected.includes(a.id);
                 return (
                   <Pressable
@@ -217,13 +197,13 @@ export default function History() {
                         )}
                       </View>
                       <View style={styles.metaWrap}>
-                        <Meta icon="clock-outline" text={`${date} · ${time}`} />
+                        <Meta icon="clock-outline" text={`${formatDate(a.created_at)} · ${formatTime(a.created_at)}`} />
                         {a.pattern ? (
-                          <Meta icon="pulse" text={`Patrón ${patternLabel(a.pattern)}`} />
+                          <Meta icon="pulse" text={`${t('detail.chip.pattern')} ${patternLabelI18n(t, a.pattern)}`} />
                         ) : (
-                          <Meta icon="cloud-sync-outline" text="Sin clasificar" />
+                          <Meta icon="cloud-sync-outline" text={t('common.unclassified')} />
                         )}
-                        <Meta icon="heart" text={`Rec ${a.recpct}%`} />
+                        <Meta icon="heart" text={t('history.meta.rec', { value: a.recpct })} />
                       </View>
                     </View>
                   </Pressable>
@@ -239,10 +219,10 @@ export default function History() {
           <View style={styles.compareBarInner}>
             <Text style={styles.compareBarText}>
               {selected.length === 0
-                ? 'Selecciona 2 evaluaciones'
+                ? t('history.compare.selectTwo')
                 : selected.length === 1
-                ? 'Selecciona 1 más'
-                : '2 evaluaciones seleccionadas'}
+                ? t('history.compare.selectOne')
+                : t('history.compare.ready')}
             </Text>
             <Pressable
               testID="history-compare-cta"
@@ -254,7 +234,7 @@ export default function History() {
                 selected.length !== 2 && { opacity: 0.45 },
               ]}
             >
-              <Text style={shared.primaryBtnText}>Comparar</Text>
+              <Text style={shared.primaryBtnText}>{t('history.compare')}</Text>
             </Pressable>
           </View>
         </View>
@@ -288,33 +268,19 @@ const styles = StyleSheet.create({
   },
   compareToggleText: { color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   eyebrow: {
-    color: colors.brandGold,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: 4,
+    color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700', marginBottom: 4,
   },
   chipRowWrap: {
-    height: 56,
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    height: 56, justifyContent: 'center',
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
   },
-  chipRow: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
+  chipRow: { paddingHorizontal: spacing.xl, gap: spacing.sm, alignItems: 'center' },
   chip: {
-    flexShrink: 0,
-    height: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexShrink: 0, height: 36,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.surfaceSecondary,
   },
   chipDot: {
@@ -328,8 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.border,
     overflow: 'hidden',
   },
   checkbox: {

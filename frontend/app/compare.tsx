@@ -13,27 +13,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Assessment, getAssessment } from '@/src/lib/api';
 import { CompareChart } from '@/src/components/CompareChart';
-import {
-  colors,
-  radius,
-  shared,
-  spacing,
-  zoneColor,
-  zoneLabel,
-  patternLabel,
-} from '@/src/lib/theme';
-
-function fmt(iso: string) {
-  const d = new Date(iso);
-  return (
-    d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) +
-    ' · ' +
-    d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-  );
-}
+import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';
+import { useI18n, zoneShortI18n, patternLabelI18n } from '@/src/lib/i18n';
 
 export default function Compare() {
   const router = useRouter();
+  const { t, formatDateTime } = useI18n();
   const { ids } = useLocalSearchParams<{ ids: string }>();
   const { width } = useWindowDimensions();
   const [a, setA] = useState<Assessment | null>(null);
@@ -46,21 +31,20 @@ export default function Compare() {
       try {
         const [id1, id2] = String(ids ?? '').split(',').filter(Boolean);
         if (!id1 || !id2) {
-          setError('Selecciona exactamente dos evaluaciones.');
+          setError(t('compare.error.select'));
           return;
         }
         const [aa, bb] = await Promise.all([getAssessment(id1), getAssessment(id2)]);
-        // Sort chronologically so "A" is always the older one
         const sorted = [aa, bb].sort((x, y) => x.created_at.localeCompare(y.created_at));
         setA(sorted[0]);
         setB(sorted[1]);
       } catch (e: any) {
-        setError(e?.message || 'No se pudo cargar la comparación.');
+        setError(e?.message || t('compare.error.select'));
       } finally {
         setLoading(false);
       }
     })();
-  }, [ids]);
+  }, [ids, t]);
 
   if (loading) {
     return (
@@ -73,10 +57,10 @@ export default function Compare() {
     return (
       <SafeAreaView style={shared.screen} edges={['top', 'bottom']}>
         <View style={{ padding: spacing.xl }}>
-          <Text style={shared.h2}>Comparación no disponible</Text>
+          <Text style={shared.h2}>{t('compare.error.title')}</Text>
           <Text style={[shared.body, { marginTop: spacing.sm }]}>{error}</Text>
           <Pressable style={[shared.primaryBtn, { marginTop: spacing.lg }]} onPress={() => router.back()}>
-            <Text style={shared.primaryBtnText}>Volver</Text>
+            <Text style={shared.primaryBtnText}>{t('detail.back')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -85,8 +69,8 @@ export default function Compare() {
 
   const ca = a.zone ? zoneColor(a.zone) : colors.brandGold;
   const cb = b.zone ? zoneColor(b.zone) : colors.brandGold;
-  const labelA = a.zone ? zoneLabel(a.zone).split(' · ')[0] : 'Pendiente';
-  const labelB = b.zone ? zoneLabel(b.zone).split(' · ')[0] : 'Pendiente';
+  const labelA = a.zone ? zoneShortI18n(t, a.zone) : t('common.pending');
+  const labelB = b.zone ? zoneShortI18n(t, b.zone) : t('common.pending');
   const dRec = +(b.recpct - a.recpct).toFixed(1);
   const dHrr = b.hrr - a.hrr;
   const dTau = +(b.tau - a.tau).toFixed(0);
@@ -99,13 +83,13 @@ export default function Compare() {
         <Pressable onPress={() => router.back()} testID="compare-back-btn" style={styles.iconBtn}>
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.topTitle}>Comparar</Text>
+        <Text style={styles.topTitle}>{t('compare.title')}</Text>
         <View style={styles.iconBtn} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl * 2 }}>
-        <Text style={styles.eyebrow}>SESIONES</Text>
-        <Text style={shared.h2}>Curvas superpuestas</Text>
+        <Text style={styles.eyebrow}>{t('compare.eyebrow')}</Text>
+        <Text style={shared.h2}>{t('compare.heading')}</Text>
 
         <View style={{ alignItems: 'center', marginTop: spacing.lg }}>
           <CompareChart
@@ -117,29 +101,30 @@ export default function Compare() {
           />
         </View>
 
-        {/* Session cards */}
         <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-          <SessionCard label="A · Anterior" a={a} c={ca} zoneLabel={labelA} solid />
-          <SessionCard label="B · Reciente" a={b} c={cb} zoneLabel={labelB} />
+          <SessionCard label={t('compare.session.a')} a={a} c={ca} zoneLabel={labelA} solid
+            formatDateTime={formatDateTime} t={t} />
+          <SessionCard label={t('compare.session.b')} a={b} c={cb} zoneLabel={labelB}
+            formatDateTime={formatDateTime} t={t} />
         </View>
 
-        {/* Deltas */}
-        <Text style={styles.section}>DIFERENCIAS (B − A)</Text>
+        <Text style={styles.section}>{t('compare.section.deltas')}</Text>
         <View style={styles.deltaGrid}>
           <Delta label="RECpct" value={`${dRec > 0 ? '+' : ''}${dRec}%`} positive={dRec >= 0} unit="" />
           <Delta label="HRR" value={`${dHrr > 0 ? '+' : ''}${dHrr}`} positive={dHrr >= 0} unit="bpm" />
           <Delta label="τ (tau)" value={`${dTau > 0 ? '+' : ''}${dTau}`} positive={dTau <= 0} unit="s" invert />
         </View>
 
-        <Text style={[shared.muted, { marginTop: spacing.md }]}>
-          RECpct y HRR más altos indican mejor recuperación; τ (tau) más bajo indica una cinética más rápida.
-        </Text>
+        <Text style={[shared.muted, { marginTop: spacing.md }]}>{t('compare.footer')}</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SessionCard({ label, a, c, zoneLabel, solid }: { label: string; a: Assessment; c: string; zoneLabel: string; solid?: boolean }) {
+function SessionCard({ label, a, c, zoneLabel, solid, formatDateTime, t }: {
+  label: string; a: Assessment; c: string; zoneLabel: string; solid?: boolean;
+  formatDateTime: (iso: string) => string; t: any;
+}) {
   return (
     <View style={[styles.card, { borderColor: c }]}>
       <View style={styles.cardTop}>
@@ -156,12 +141,12 @@ function SessionCard({ label, a, c, zoneLabel, solid }: { label: string; a: Asse
         </View>
         <Text style={[styles.cardZone, { color: c }]}>{zoneLabel}</Text>
       </View>
-      <Text style={styles.cardDate}>{fmt(a.created_at)}</Text>
+      <Text style={styles.cardDate}>{formatDateTime(a.created_at)}</Text>
       <View style={styles.cardMetaRow}>
         <MetaMini label="RECpct" value={`${a.recpct}%`} />
         <MetaMini label="HRR" value={`${a.hrr}bpm`} />
         <MetaMini label="τ" value={`${a.tau}s`} />
-        <MetaMini label="Patrón" value={a.pattern ? patternLabel(a.pattern) : '—'} />
+        <MetaMini label={t('detail.chip.pattern')} value={a.pattern ? patternLabelI18n(t, a.pattern) : '—'} />
       </View>
     </View>
   );
@@ -176,9 +161,9 @@ function MetaMini({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Delta({
-  label, value, positive, unit, invert,
-}: { label: string; value: string; positive: boolean; unit: string; invert?: boolean }) {
+function Delta({ label, value, positive, unit, invert }: {
+  label: string; value: string; positive: boolean; unit: string; invert?: boolean;
+}) {
   const isGood = invert ? !positive : positive;
   const c = isGood ? colors.zoneGreen : colors.zoneRed;
   return (
