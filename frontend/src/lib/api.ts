@@ -134,6 +134,17 @@ export async function acceptTerms(deviceId: string, version = '1.0') {
   });
 }
 
+export type TermsInfo = {
+  version: string;
+  effective_date: string;
+  changelog: { en?: string; es?: string };
+  license: string;
+};
+
+export async function getCurrentTerms() {
+  return req<TermsInfo>('/terms');
+}
+
 export async function fetchProfile(deviceId: string) {
   return req<Profile | null>(`/profile?device_id=${encodeURIComponent(deviceId)}`);
 }

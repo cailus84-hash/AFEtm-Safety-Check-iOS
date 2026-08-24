@@ -15,6 +15,7 @@ import {
   Assessment,
   Profile,
   fetchProfile,
+  getCurrentTerms,
   getDeviceId,
   listAssessments,
 } from '@/src/lib/api';
@@ -45,20 +46,25 @@ export default function Home() {
   const load = useCallback(async () => {
     try {
       const id = await getDeviceId();
-      const [p, list] = await Promise.all([
+      // Fetch profile + current server terms in parallel. If the server
+      // has bumped the Terms version, we bounce to /terms?mode=update
+      // to force a re-acceptance before the athlete can create anything
+      // (the server also enforces this via 403 PERSONAL_USE_TERMS_OUTDATED).
+      const [p, list, terms] = await Promise.all([
         fetchProfile(id),
-        listAssessments(id),
+        listAssessments(id).catch(() => []),
+        getCurrentTerms().catch(() => null),
       ]);
-      // Personal-use gates:
-      //   1. No profile at all → onboarding.
-      //   2. Profile exists but Terms not accepted → send back to terms.
-      //   3. Profile is a stub (accept-terms only, no name yet) → setup.
       if (!p) {
         router.replace('/');
         return;
       }
       if (!p.terms_accepted_at) {
         router.replace('/terms');
+        return;
+      }
+      if (terms && p.terms_version && terms.version !== p.terms_version) {
+        router.replace('/terms?mode=update');
         return;
       }
       if (!p.name) {

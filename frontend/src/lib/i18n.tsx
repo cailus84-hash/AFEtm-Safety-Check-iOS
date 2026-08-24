@@ -54,6 +54,14 @@ const dict = {
     'terms.error.all': 'You must accept all three statements to continue.',
     'terms.error.save': 'Could not save your acceptance. Try again.',
     'terms.version': 'Terms v{version}',
+    'terms.updated.eyebrow': 'TERMS UPDATED',
+    'terms.updated.title': 'The Personal-Use Terms have been updated',
+    'terms.updated.body':
+      'We updated the AFEtm Mobile Personal-Use Terms. Please review the changes and re-accept them before continuing to use the app.',
+    'terms.updated.previous': 'Previously accepted: v{previous}',
+    'terms.updated.new': 'New version: v{version} · effective {date}',
+    'terms.updated.changelog': "WHAT'S NEW",
+    'terms.updated.accept': 'Accept updated terms',
 
     // Institutional access
     'inst.eyebrow': 'INSTITUTIONAL ACCESS',
@@ -512,6 +520,14 @@ const dict = {
     'terms.error.all': 'Debes aceptar las tres declaraciones para continuar.',
     'terms.error.save': 'No se pudo guardar tu aceptación. Intenta de nuevo.',
     'terms.version': 'Términos v{version}',
+    'terms.updated.eyebrow': 'TÉRMINOS ACTUALIZADOS',
+    'terms.updated.title': 'Los Términos de Uso Personal han sido actualizados',
+    'terms.updated.body':
+      'Actualizamos los Términos de Uso Personal de AFEtm Mobile. Revisa los cambios y vuelve a aceptarlos antes de seguir usando la app.',
+    'terms.updated.previous': 'Aceptado antes: v{previous}',
+    'terms.updated.new': 'Nueva versión: v{version} · vigente {date}',
+    'terms.updated.changelog': 'QUÉ CAMBIÓ',
+    'terms.updated.accept': 'Aceptar términos actualizados',
 
     'inst.eyebrow': 'ACCESO INSTITUCIONAL',
     'inst.title': 'Se requiere acceso institucional',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,41 +6,80 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n } from '@/src/lib/i18n';
-import { acceptTerms, getDeviceId } from '@/src/lib/api';
+import {
+  acceptTerms,
+  fetchProfile,
+  getCurrentTerms,
+  getDeviceId,
+  TermsInfo,
+} from '@/src/lib/api';
 
-const TERMS_VERSION = '1.0';
-const INSTITUTIONAL_URL = 'https://wewonmatrix.com/';
+const FALLBACK_VERSION = '1.0';
 
 /**
  * Mandatory acceptance of the AFEtm Mobile Personal-Use Terms.
  *
- * Placed AFTER the /index onboarding hero and BEFORE /profile-setup.
- * The three individual checkboxes must all be checked for the primary
- * button to enable. Acceptance is persisted server-side (with a
- * timestamp + version) via /api/profile/accept-terms. Without a valid
- * acceptance, /api/assessments rejects with HTTP 403.
+ * Two modes:
+ *   • Initial (default) — first-time onboarding, all three checkboxes.
+ *   • Update — the server bumped the Terms version. We fetch the new
+ *     version + changelog from `GET /api/terms`, show a "TERMS UPDATED"
+ *     banner explaining what changed and require re-acceptance before
+ *     the athlete can create any new assessment.
+ *
+ * The screen auto-detects the "update" case:
+ *   1. If the profile already has `terms_accepted_at` AND the server
+ *      version differs from the accepted one → update mode.
+ *   2. If the route is opened with `?mode=update` (e.g. by the home
+ *      redirect) we also force update mode.
  */
 export default function Terms() {
   const router = useRouter();
   const { t, lang, toggle } = useI18n();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+
   const [c1, setC1] = useState(false);
   const [c2, setC2] = useState(false);
   const [c3, setC3] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const allChecked = c1 && c2 && c3;
+  const [serverTerms, setServerTerms] = useState<TermsInfo | null>(null);
+  const [previousVersion, setPreviousVersion] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
 
-  const openInstitutional = () => {
-    router.push('/institutional');
-  };
+  useEffect(() => {
+    (async () => {
+      try {
+        const [info, deviceId] = await Promise.all([
+          getCurrentTerms().catch(() => null),
+          getDeviceId(),
+        ]);
+        setServerTerms(info);
+        const prof = await fetchProfile(deviceId).catch(() => null);
+        const prev = prof?.terms_version ?? null;
+        setPreviousVersion(prev);
+      } finally {
+        setInitializing(false);
+      }
+    })();
+  }, []);
+
+  const version = serverTerms?.version ?? FALLBACK_VERSION;
+  const effectiveDate = serverTerms?.effective_date ?? '';
+  const changelog =
+    (lang === 'es' ? serverTerms?.changelog?.es : serverTerms?.changelog?.en) ??
+    serverTerms?.changelog?.en ??
+    '';
+  const isUpdate =
+    mode === 'update' ||
+    (!!previousVersion && previousVersion !== version);
+  const allChecked = c1 && c2 && c3;
 
   const proceed = async () => {
     if (!allChecked) {
@@ -51,8 +90,14 @@ export default function Terms() {
     setError(null);
     try {
       const deviceId = await getDeviceId();
-      await acceptTerms(deviceId, TERMS_VERSION);
-      router.replace('/profile-setup');
+      const prof = await acceptTerms(deviceId, version);
+      // If profile is already complete (name set) → go to home,
+      // otherwise onboarding continues to profile-setup.
+      if (prof?.name) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/profile-setup');
+      }
     } catch (e: any) {
       setError(e?.message || t('terms.error.save'));
     } finally {
@@ -74,82 +119,134 @@ export default function Terms() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>{t('terms.eyebrow')}</Text>
-        <Text style={shared.h1}>{t('terms.title')}</Text>
-
-        {/* Version + license badge */}
-        <View style={styles.versionRow}>
-          <View style={styles.versionPill}>
-            <MaterialCommunityIcons name="shield-lock-outline" size={12} color={colors.brandGold} />
-            <Text style={styles.versionText}>{t('terms.version', { version: TERMS_VERSION })}</Text>
+        {initializing ? (
+          <View style={{ paddingTop: spacing.xxxl, alignItems: 'center' }}>
+            <ActivityIndicator color={colors.brandGold} />
           </View>
-        </View>
+        ) : (
+          <>
+            {isUpdate && (
+              <View style={styles.updateCard} testID="terms-update-banner">
+                <View style={styles.updateBadgeRow}>
+                  <View style={styles.updateBadge}>
+                    <MaterialCommunityIcons name="autorenew" size={12} color="#000" />
+                    <Text style={styles.updateBadgeText}>{t('terms.updated.eyebrow')}</Text>
+                  </View>
+                </View>
+                <Text style={styles.updateTitle}>{t('terms.updated.title')}</Text>
+                <Text style={styles.updateBody}>{t('terms.updated.body')}</Text>
+                <View style={styles.updateMetaRow}>
+                  {previousVersion ? (
+                    <View style={styles.updateMetaChip}>
+                      <MaterialCommunityIcons
+                        name="history"
+                        size={11}
+                        color={colors.onSurfaceTertiary}
+                      />
+                      <Text style={styles.updateMetaText}>
+                        {t('terms.updated.previous', { previous: previousVersion })}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.updateMetaChip}>
+                    <MaterialCommunityIcons
+                      name="check-decagram-outline"
+                      size={11}
+                      color={colors.brandGold}
+                    />
+                    <Text style={[styles.updateMetaText, { color: colors.brandGold }]}>
+                      {t('terms.updated.new', { version, date: effectiveDate })}
+                    </Text>
+                  </View>
+                </View>
+                {changelog ? (
+                  <View style={styles.changelogBox}>
+                    <Text style={styles.changelogTitle}>
+                      {t('terms.updated.changelog')}
+                    </Text>
+                    <Text style={styles.changelogText}>{changelog}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
 
-        <View style={styles.introCard}>
-          <Text style={styles.introText}>{t('terms.intro')}</Text>
-        </View>
+            <Text style={styles.eyebrow}>{t('terms.eyebrow')}</Text>
+            <Text style={shared.h1}>{t('terms.title')}</Text>
 
-        {/* Allowed */}
-        <Text style={[styles.section, { color: colors.zoneGreen, marginTop: spacing.xl }]}>
-          {t('terms.sectionAllowed')}
-        </Text>
-        <View style={styles.list}>
-          <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.1')} />
-          <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.2')} />
-          <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.3')} />
-        </View>
+            <View style={styles.versionRow}>
+              <View style={styles.versionPill}>
+                <MaterialCommunityIcons name="shield-lock-outline" size={12} color={colors.brandGold} />
+                <Text style={styles.versionText}>{t('terms.version', { version })}</Text>
+              </View>
+            </View>
 
-        {/* NOT Allowed */}
-        <Text style={[styles.section, { color: colors.zoneRed, marginTop: spacing.lg }]}>
-          {t('terms.sectionNotAllowed')}
-        </Text>
-        <View style={styles.list}>
-          <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.1')} />
-          <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.2')} />
-          <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.3')} />
-          <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.4')} />
-          <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.5')} />
-        </View>
+            <View style={styles.introCard}>
+              <Text style={styles.introText}>{t('terms.intro')}</Text>
+            </View>
 
-        <View style={styles.divider} />
+            {/* Allowed */}
+            <Text style={[styles.section, { color: colors.zoneGreen, marginTop: spacing.xl }]}>
+              {t('terms.sectionAllowed')}
+            </Text>
+            <View style={styles.list}>
+              <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.1')} />
+              <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.2')} />
+              <Bullet color={colors.zoneGreen} icon="check-circle" text={t('terms.allowed.3')} />
+            </View>
 
-        {/* Checkboxes */}
-        <Checkbox testID="terms-chk-self" checked={c1} onToggle={() => setC1((v) => !v)} label={t('terms.checkbox.self')} />
-        <Checkbox testID="terms-chk-institutional" checked={c2} onToggle={() => setC2((v) => !v)} label={t('terms.checkbox.institutional')} />
-        <Checkbox testID="terms-chk-terms" checked={c3} onToggle={() => setC3((v) => !v)} label={t('terms.checkbox.terms')} />
+            {/* NOT Allowed */}
+            <Text style={[styles.section, { color: colors.zoneRed, marginTop: spacing.lg }]}>
+              {t('terms.sectionNotAllowed')}
+            </Text>
+            <View style={styles.list}>
+              <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.1')} />
+              <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.2')} />
+              <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.3')} />
+              <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.4')} />
+              <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.5')} />
+            </View>
 
-        {/* Institutional CTA */}
-        <View style={styles.instCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.instTitle}>{t('terms.institutional.cta')}</Text>
-            <Text style={styles.instHint}>{t('inst.contact.hint')}</Text>
-          </View>
-          <Pressable
-            style={styles.instBtn}
-            onPress={openInstitutional}
-            testID="terms-institutional-link"
-          >
-            <Text style={styles.instBtnText}>{t('terms.institutional.link')}</Text>
-            <MaterialCommunityIcons name="arrow-top-right" size={14} color={colors.brandGold} />
-          </Pressable>
-        </View>
+            <View style={styles.divider} />
 
-        {error ? <Text style={styles.error} testID="terms-error">{error}</Text> : null}
+            <Checkbox testID="terms-chk-self" checked={c1} onToggle={() => setC1((v) => !v)} label={t('terms.checkbox.self')} />
+            <Checkbox testID="terms-chk-institutional" checked={c2} onToggle={() => setC2((v) => !v)} label={t('terms.checkbox.institutional')} />
+            <Checkbox testID="terms-chk-terms" checked={c3} onToggle={() => setC3((v) => !v)} label={t('terms.checkbox.terms')} />
+
+            <View style={styles.instCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.instTitle}>{t('terms.institutional.cta')}</Text>
+                <Text style={styles.instHint}>{t('inst.contact.hint')}</Text>
+              </View>
+              <Pressable
+                style={styles.instBtn}
+                onPress={() => router.push('/institutional')}
+                testID="terms-institutional-link"
+              >
+                <Text style={styles.instBtnText}>{t('terms.institutional.link')}</Text>
+                <MaterialCommunityIcons name="arrow-top-right" size={14} color={colors.brandGold} />
+              </Pressable>
+            </View>
+
+            {error ? <Text style={styles.error} testID="terms-error">{error}</Text> : null}
+          </>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
         <Pressable
           testID="terms-accept-btn"
-          disabled={!allChecked || saving}
+          disabled={!allChecked || saving || initializing}
           onPress={proceed}
           style={({ pressed }) => [
             shared.primaryBtn,
-            (!allChecked || saving) && { opacity: 0.4 },
+            (!allChecked || saving || initializing) && { opacity: 0.4 },
             pressed && { opacity: 0.85 },
           ]}
         >
           {saving ? <ActivityIndicator color="#000" /> : (
-            <Text style={shared.primaryBtnText}>{t('terms.accept')}</Text>
+            <Text style={shared.primaryBtnText}>
+              {isUpdate ? t('terms.updated.accept') : t('terms.accept')}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -167,16 +264,8 @@ function Bullet({ color, icon, text }: { color: string; icon: any; text: string 
 }
 
 function Checkbox({
-  checked,
-  onToggle,
-  label,
-  testID,
-}: {
-  checked: boolean;
-  onToggle: () => void;
-  label: string;
-  testID: string;
-}) {
+  checked, onToggle, label, testID,
+}: { checked: boolean; onToggle: () => void; label: string; testID: string }) {
   return (
     <Pressable onPress={onToggle} style={styles.checkboxRow} testID={testID}>
       <View
@@ -216,6 +305,40 @@ const styles = StyleSheet.create({
   },
   langPillText: { color: colors.brandGold, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl * 2 },
+  updateCard: {
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 2, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    shadowColor: colors.brandGold, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+  },
+  updateBadgeRow: { flexDirection: 'row', marginBottom: spacing.sm },
+  updateBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: 4,
+    borderRadius: radius.pill, backgroundColor: colors.brandGold,
+  },
+  updateBadgeText: { color: '#000', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  updateTitle: { color: colors.brandGold, fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
+  updateBody: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  updateMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  updateMetaChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.sm, paddingVertical: 3,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  updateMetaText: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  changelogBox: {
+    marginTop: spacing.md,
+    padding: spacing.sm + 2,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  changelogTitle: { color: colors.brandGold, fontSize: 10, letterSpacing: 1.5, fontWeight: '800', marginBottom: 4 },
+  changelogText: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 17 },
   eyebrow: {
     color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700', marginBottom: 4,
   },

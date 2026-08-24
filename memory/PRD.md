@@ -46,6 +46,23 @@ Tagline (ES): *Antes de entrenar. Antes de competir. Antes de exigir más.*
 ### New backend endpoints
 - `POST /api/profile/accept-terms` → stores `terms_accepted_at` +
   `terms_version` on the profile document (creates a stub profile if none exists).
+- `GET /api/terms` → returns the currently published Terms metadata
+  (`version`, `effective_date`, bilingual `changelog`). The mobile app
+  calls this on Home boot and forces a re-acceptance if the version does
+  not match `profile.terms_version`.
+
+### Terms Version Bump
+- `TERMS_VERSION` and `TERMS_EFFECTIVE_DATE` are env-driven
+  (`backend/.env`). Bumping the env var and restarting the backend is
+  enough to invalidate every prior acceptance. The Terms screen auto
+  detects this and switches to an **"TERMS UPDATED"** banner that shows
+  the previous version, the new version + effective date, and the
+  bilingual changelog for the new version. All three checkboxes reset
+  so the athlete must actively re-accept.
+- Server-side enforcement code `PERSONAL_USE_TERMS_OUTDATED` — assessment
+  creation, read and mutation is blocked until the acceptance is
+  refreshed. The mobile client also route-guards from Home to
+  `/terms?mode=update` before the athlete can attempt anything.
 
 ### Removed / never-implemented (Personal-Use scope)
 - No Create Athlete / Athlete Roster / Team Management / Organization

@@ -33,7 +33,37 @@ api_router = APIRouter(prefix="/api")
 
 
 # ---------- Models ----------
-TERMS_VERSION = "1.0"
+# TERMS_VERSION drives the "Terms Version Bump" flow. When we publish a new
+# version the mobile app compares this against the value stored on each
+# profile (`terms_version`) and forces the athlete to re-accept before any
+# new assessment can be created. `TERMS_VERSION` can be overridden via the
+# `TERMS_VERSION` env var so the version can be bumped without redeploying
+# the whole app image.
+TERMS_VERSION = (os.environ.get('TERMS_VERSION') or '1.0').strip()
+TERMS_EFFECTIVE_DATE = (os.environ.get('TERMS_EFFECTIVE_DATE') or '2026-06-01').strip()
+
+# Human-readable changelog by version. Rendered on the Terms screen when
+# the athlete is being asked to re-accept an updated version.
+TERMS_CHANGELOG: Dict[str, Dict[str, str]] = {
+    "1.0": {
+        "en": "Initial AFEtm Mobile Personal-Use Terms.",
+        "es": "Términos iniciales de Uso Personal de AFEtm Mobile.",
+    },
+    "1.1": {
+        "en": (
+            "Clarified the personal-use scope for wellness/readiness data, "
+            "expanded the institutional-use definition to cover research "
+            "and third-party evaluations, and added stronger cross-device "
+            "protection wording."
+        ),
+        "es": (
+            "Aclaramos el alcance de uso personal para datos de bienestar/"
+            "readiness, ampliamos la definición de uso institucional para "
+            "cubrir investigación y evaluaciones de terceros, y reforzamos "
+            "la protección entre dispositivos."
+        ),
+    },
+}
 
 
 class Profile(BaseModel):
@@ -329,6 +359,23 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
     return derived, None
 
 
+@api_router.get("/terms")
+async def get_terms():
+    """Return the current AFEtm Mobile Personal-Use Terms metadata.
+
+    The mobile app polls this endpoint on boot / when entering the tabs
+    stack. If `version` differs from what the profile stored, the app
+    forces the athlete back through the /terms acceptance screen. This is
+    the "Terms Version Bump" mechanism.
+    """
+    return {
+        "version": TERMS_VERSION,
+        "effective_date": TERMS_EFFECTIVE_DATE,
+        "changelog": TERMS_CHANGELOG.get(TERMS_VERSION, {}),
+        "license": "AFEtm Mobile — Personal Use Only",
+    }
+
+
 async def _require_owned_profile(device_id: str) -> dict:
     """Personal-use enforcement helper.
 
@@ -360,6 +407,23 @@ async def _require_owned_profile(device_id: str) -> dict:
                     "before continuing."
                 ),
                 "terms_version": TERMS_VERSION,
+            },
+        )
+    # Terms Version Bump: previously accepted an older version → must
+    # re-accept before continuing. Distinct code so the client can show
+    # a "Terms Updated" prompt instead of the initial one.
+    if str(prof.get("terms_version") or "") != TERMS_VERSION:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERSONAL_USE_TERMS_OUTDATED",
+                "message": (
+                    "The AFEtm Mobile Personal-Use Terms have been "
+                    "updated. Please review and accept the new version "
+                    "before continuing."
+                ),
+                "terms_version": TERMS_VERSION,
+                "accepted_version": prof.get("terms_version"),
             },
         )
     return prof
