@@ -45,7 +45,12 @@ export default function ProfileSetup() {
       const id = await getDeviceId();
       setDeviceId(id);
       const p = await fetchProfile(id).catch(() => null);
-      if (p) {
+      // Personal-use gate: terms MUST be accepted before this screen.
+      if (!p || !p.terms_accepted_at) {
+        router.replace('/terms');
+        return;
+      }
+      if (p && p.name) {
         setName(p.name);
         setAge(String(p.age));
         setWeight(String(p.weight));
@@ -54,7 +59,7 @@ export default function ProfileSetup() {
       }
       setInitializing(false);
     })();
-  }, []);
+  }, [router]);
 
   const sportLabelFor = useMemo(
     () => (canonical: string) => {

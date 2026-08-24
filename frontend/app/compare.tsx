@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Assessment, getAssessment } from '@/src/lib/api';
+import { Assessment, getAssessment, getDeviceId } from '@/src/lib/api';
 import { CompareChart } from '@/src/components/CompareChart';
 import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';
 import { useI18n, zoneShortI18n, patternLabelI18n } from '@/src/lib/i18n';
@@ -34,7 +34,8 @@ export default function Compare() {
           setError(t('compare.error.select'));
           return;
         }
-        const [aa, bb] = await Promise.all([getAssessment(id1), getAssessment(id2)]);
+        const deviceId = await getDeviceId();
+        const [aa, bb] = await Promise.all([getAssessment(id1, deviceId), getAssessment(id2, deviceId)]);
         const sorted = [aa, bb].sort((x, y) => x.created_at.localeCompare(y.created_at));
         setA(sorted[0]);
         setB(sorted[1]);

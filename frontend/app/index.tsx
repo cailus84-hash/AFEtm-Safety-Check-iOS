@@ -26,8 +26,16 @@ export default function Index() {
       try {
         const id = await getDeviceId();
         const profile = await fetchProfile(id);
-        if (profile) {
+        // Only jump straight to the tabs when the athlete has BOTH
+        // accepted the Personal-Use Terms AND completed the profile
+        // (name is empty on a "stub" profile created by /accept-terms).
+        if (profile && profile.terms_accepted_at && profile.name) {
           router.replace('/(tabs)');
+          return;
+        }
+        if (profile && profile.terms_accepted_at && !profile.name) {
+          // Terms already accepted but profile incomplete → skip to setup.
+          router.replace('/profile-setup');
           return;
         }
       } catch {}
@@ -128,7 +136,7 @@ export default function Index() {
           <Pressable
             testID="onboarding-cta-start"
             style={({ pressed }) => [shared.primaryBtn, pressed && { opacity: 0.85 }]}
-            onPress={() => router.push('/profile-setup')}
+            onPress={() => router.push('/terms')}
           >
             <Text style={shared.primaryBtnText}>{t('onboarding.cta')}</Text>
           </Pressable>

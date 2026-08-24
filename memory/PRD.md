@@ -7,6 +7,52 @@ AFEtm Safety Check is a preventive cardiovascular recovery assessment app for at
 Tagline (EN default): *Before Training. Before Competition. Before Pushing Harder.*
 Tagline (ES): *Antes de entrenar. Antes de competir. Antes de exigir más.*
 
+## Scope (v9 — Personal-Use licensing + institutional gate)
+
+### Onboarding flow (updated)
+1. `/` — Hero + language pill (EN default, ES toggle, device-locale detected).
+2. `/terms` — **Mandatory Personal-Use Terms acceptance**. Three separate
+   checkboxes:
+   - "I confirm that I will use AFEtm Mobile only for myself."
+   - "I understand that institutional / team / professional / research /
+     third-party use requires express authorization from WeWon Smart
+     Sport Solutions LLC."
+   - "I accept the Terms of Use and Privacy Policy."
+   Acceptance is persisted via `POST /api/profile/accept-terms` with
+   `terms_version` (currently `1.0`) + ISO timestamp.
+3. `/profile-setup` — Athlete profile (name, age, weight, sport, target zone).
+4. `/(tabs)` — Home. Gated: if `terms_accepted_at` is null the app
+   automatically bounces back to `/terms`.
+
+### Institutional access
+- `/institutional` screen accessible from **Terms** and from **Profile → Personal Use Only card**.
+- "Request Institutional Access" button opens `https://wewonmatrix.com/` via
+  `Linking.openURL`.
+- The mobile app cannot activate institutional access on its own — this is
+  gated externally by WeWon Smart Sport Solutions LLC.
+
+### Server-side enforcement (`/app/backend/server.py`)
+- Every `/api/assessments*` mutation and read enforces `device_id` ownership.
+  A mismatch returns HTTP `403 PERSONAL_USE_OWNERSHIP_VIOLATION`.
+- `create_assessment` extra checks:
+  - Requires an existing profile with `terms_accepted_at` set
+    (`PERSONAL_USE_TERMS_REQUIRED`).
+  - Rejects when the submitted `age` deviates from the profile age by
+    more than 1 year (`PERSONAL_USE_AGE_MISMATCH`) — closes the "someone
+    else is being evaluated" loophole.
+- `TERMS_VERSION = "1.0"` exposed in the `/api/` health endpoint alongside
+  the `license` string.
+
+### New backend endpoints
+- `POST /api/profile/accept-terms` → stores `terms_accepted_at` +
+  `terms_version` on the profile document (creates a stub profile if none exists).
+
+### Removed / never-implemented (Personal-Use scope)
+- No Create Athlete / Athlete Roster / Team Management / Organization
+  Management / Institutional Dashboard / Coach Management / Bulk
+  assessments / Third-party athlete records anywhere in the mobile app.
+  The user profile automatically represents the person being evaluated.
+
 ## Scope (v8 — i18n + branding)
 - **Strict bilingual UX (EN default, ES toggle)**. Full dictionary lives in
   `/app/frontend/src/lib/i18n.tsx`. On first launch the app detects the device

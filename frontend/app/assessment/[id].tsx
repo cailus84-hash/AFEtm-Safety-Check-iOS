@@ -50,11 +50,11 @@ export default function AssessmentDetail() {
     (async () => {
       try {
         if (!id) return;
-        const assessment = await getAssessment(id);
+        const deviceId = await getDeviceId();
+        const assessment = await getAssessment(id, deviceId);
         setA(assessment);
 
         if (!assessment.zone) return;
-        const deviceId = await getDeviceId();
         const profile = await fetchProfile(deviceId).catch(() => null);
         const target = profile?.target_zone ?? null;
         const rank: Record<string, number> = { RED: 0, YELLOW: 1, GREEN: 2, BLUE: 3 };
@@ -78,7 +78,8 @@ export default function AssessmentDetail() {
     setResyncing(true);
     setResyncErr(null);
     try {
-      const updated = await resyncAssessment(id);
+      const deviceId = await getDeviceId();
+      const updated = await resyncAssessment(id, deviceId);
       setA(updated);
     } catch (e: any) {
       if (e instanceof UpstreamError) {
@@ -97,7 +98,8 @@ export default function AssessmentDetail() {
     if (!id) return;
     setDeleting(true);
     try {
-      await deleteAssessment(id);
+      const deviceId = await getDeviceId();
+      await deleteAssessment(id, deviceId);
       router.replace('/(tabs)/history');
     } finally {
       setDeleting(false);

@@ -27,6 +27,66 @@ const dict = {
     'onboarding.hero.alt': 'AFE™ Visual Color Guide',
     'onboarding.hero.badge': 'OFFICIAL VISUAL GUIDE',
 
+    // Terms of Personal Use — mandatory acceptance
+    'terms.eyebrow': 'LICENSING · PERSONAL USE',
+    'terms.title': 'Personal Use Only',
+    'terms.intro':
+      'AFEtm Mobile is licensed exclusively for your personal use and your own physiological and wellness information. Use for teams, athletes, patients, students, clients, schools, clubs, clinics, companies, universities, research projects, or other organizations requires prior express authorization from WeWon Smart Sport Solutions LLC.',
+    'terms.sectionAllowed': 'YOU MAY',
+    'terms.allowed.1': 'Record and review your own AFE™ Safety Checks.',
+    'terms.allowed.2': 'Track your personal recovery, trend and history.',
+    'terms.allowed.3': 'Set reminders for your own training sessions.',
+    'terms.sectionNotAllowed': 'YOU MAY NOT',
+    'terms.notAllowed.1': 'Create or manage athletes, patients, students or clients other than yourself.',
+    'terms.notAllowed.2': 'Create teams, rosters, schools, clubs, clinics, companies, universities or organizations.',
+    'terms.notAllowed.3': 'Perform evaluations on behalf of another person.',
+    'terms.notAllowed.4': 'Use this app as a coach, trainer, clinician, researcher, teacher or institution.',
+    'terms.notAllowed.5': 'Share a single personal account for institutional or team use.',
+    'terms.checkbox.self':
+      'I confirm that I will use AFEtm Mobile only for myself.',
+    'terms.checkbox.institutional':
+      'I understand that institutional, team, professional, research or third-party use requires express authorization from WeWon Smart Sport Solutions LLC.',
+    'terms.checkbox.terms':
+      'I accept the Terms of Use and Privacy Policy.',
+    'terms.institutional.cta': 'Need institutional access?',
+    'terms.institutional.link': 'Request institutional access',
+    'terms.accept': 'Accept and continue',
+    'terms.error.all': 'You must accept all three statements to continue.',
+    'terms.error.save': 'Could not save your acceptance. Try again.',
+    'terms.version': 'Terms v{version}',
+
+    // Institutional access
+    'inst.eyebrow': 'INSTITUTIONAL ACCESS',
+    'inst.title': 'Institutional Access Required',
+    'inst.body':
+      'This functionality is available only through an authorized WeWon institutional license. Institutional use requires prior express authorization from WeWon Smart Sport Solutions LLC.',
+    'inst.what.title': 'WHAT REQUIRES INSTITUTIONAL ACCESS',
+    'inst.what.1': 'Teams, rosters and multi-athlete dashboards.',
+    'inst.what.2': 'Clinics, universities, schools, clubs and companies.',
+    'inst.what.3': 'Coaches, trainers, clinicians, teachers and researchers performing evaluations on other people.',
+    'inst.what.4': 'Bulk assessments and third-party athlete records.',
+    'inst.contact': 'Request institutional access',
+    'inst.contact.hint': 'Opens wewonmatrix.com in your browser.',
+    'inst.footer':
+      'The mobile app cannot activate institutional access on its own. WeWon Smart Sport Solutions LLC authorizes institutional licenses separately.',
+    'inst.openError': 'Could not open the external link.',
+
+    // Personal-use banner in profile tab
+    'profile.license.title': 'Personal Use Only',
+    'profile.license.body':
+      'This app is licensed exclusively for you. Team, clinical, research or institutional use requires a WeWon institutional license.',
+    'profile.license.cta': 'Institutional access',
+
+    // Server-side rejection messages (HTTP 403)
+    'error.personalUse.ownership':
+      'Personal-use rule: you cannot access data that belongs to another person.',
+    'error.personalUse.terms':
+      'You must accept the AFEtm Mobile Personal-Use Terms before continuing.',
+    'error.personalUse.profile':
+      'A personal profile is required before creating assessments.',
+    'error.personalUse.ageMismatch':
+      'Assessment age does not match your personal profile. AFEtm Mobile is licensed for personal use only.',
+
     // Common actions
     'common.next': 'Next',
     'common.back': 'Back',
@@ -424,6 +484,63 @@ const dict = {
       'No es una aplicación de diagnóstico médico. No sustituye la evaluación profesional.',
     'onboarding.hero.alt': 'Guía Visual de Colores AFE™',
     'onboarding.hero.badge': 'GUÍA VISUAL OFICIAL',
+
+    // Términos de uso personal
+    'terms.eyebrow': 'LICENCIA · USO PERSONAL',
+    'terms.title': 'Uso Personal Únicamente',
+    'terms.intro':
+      'AFEtm Mobile está licenciado exclusivamente para tu uso personal y tu propia información fisiológica y de bienestar. El uso para equipos, atletas, pacientes, estudiantes, clientes, escuelas, clubes, clínicas, empresas, universidades, proyectos de investigación u otras organizaciones requiere autorización expresa previa de WeWon Smart Sport Solutions LLC.',
+    'terms.sectionAllowed': 'PUEDES',
+    'terms.allowed.1': 'Registrar y revisar tus propios chequeos AFE™ Safety Check.',
+    'terms.allowed.2': 'Ver tu recuperación, tendencia e historial personal.',
+    'terms.allowed.3': 'Programar recordatorios de tus propios entrenamientos.',
+    'terms.sectionNotAllowed': 'NO PUEDES',
+    'terms.notAllowed.1': 'Crear o administrar atletas, pacientes, estudiantes o clientes distintos a ti.',
+    'terms.notAllowed.2': 'Crear equipos, rosters, escuelas, clubes, clínicas, empresas, universidades u organizaciones.',
+    'terms.notAllowed.3': 'Realizar evaluaciones por cuenta de otra persona.',
+    'terms.notAllowed.4': 'Usar esta app como entrenador, clínico, investigador, docente o institución.',
+    'terms.notAllowed.5': 'Compartir una sola cuenta personal para uso institucional o de equipo.',
+    'terms.checkbox.self':
+      'Confirmo que usaré AFEtm Mobile solo para mí.',
+    'terms.checkbox.institutional':
+      'Entiendo que el uso institucional, de equipo, profesional, de investigación o de terceros requiere autorización expresa de WeWon Smart Sport Solutions LLC.',
+    'terms.checkbox.terms':
+      'Acepto los Términos de Uso y la Política de Privacidad.',
+    'terms.institutional.cta': '¿Necesitas acceso institucional?',
+    'terms.institutional.link': 'Solicitar acceso institucional',
+    'terms.accept': 'Aceptar y continuar',
+    'terms.error.all': 'Debes aceptar las tres declaraciones para continuar.',
+    'terms.error.save': 'No se pudo guardar tu aceptación. Intenta de nuevo.',
+    'terms.version': 'Términos v{version}',
+
+    'inst.eyebrow': 'ACCESO INSTITUCIONAL',
+    'inst.title': 'Se requiere acceso institucional',
+    'inst.body':
+      'Esta funcionalidad solo está disponible mediante una licencia institucional autorizada de WeWon. El uso institucional requiere autorización expresa previa de WeWon Smart Sport Solutions LLC.',
+    'inst.what.title': 'QUÉ REQUIERE ACCESO INSTITUCIONAL',
+    'inst.what.1': 'Equipos, rosters y dashboards multi-atleta.',
+    'inst.what.2': 'Clínicas, universidades, escuelas, clubes y empresas.',
+    'inst.what.3': 'Entrenadores, clínicos, docentes e investigadores evaluando a otras personas.',
+    'inst.what.4': 'Evaluaciones en lote y registros de atletas de terceros.',
+    'inst.contact': 'Solicitar acceso institucional',
+    'inst.contact.hint': 'Abre wewonmatrix.com en tu navegador.',
+    'inst.footer':
+      'La app móvil no puede activar el acceso institucional por sí misma. WeWon Smart Sport Solutions LLC autoriza las licencias institucionales por separado.',
+    'inst.openError': 'No se pudo abrir el enlace externo.',
+
+    'profile.license.title': 'Uso Personal Únicamente',
+    'profile.license.body':
+      'Esta app está licenciada exclusivamente para ti. El uso en equipos, clínico, de investigación o institucional requiere una licencia institucional de WeWon.',
+    'profile.license.cta': 'Acceso institucional',
+
+    'error.personalUse.ownership':
+      'Regla de uso personal: no puedes acceder a datos que pertenecen a otra persona.',
+    'error.personalUse.terms':
+      'Debes aceptar los Términos de Uso Personal de AFEtm Mobile para continuar.',
+    'error.personalUse.profile':
+      'Se requiere un perfil personal antes de crear evaluaciones.',
+    'error.personalUse.ageMismatch':
+      'La edad de la evaluación no coincide con tu perfil personal. AFEtm Mobile es licencia de uso personal únicamente.',
 
     'common.next': 'Siguiente',
     'common.back': 'Atrás',

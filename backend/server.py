@@ -33,6 +33,9 @@ api_router = APIRouter(prefix="/api")
 
 
 # ---------- Models ----------
+TERMS_VERSION = "1.0"
+
+
 class Profile(BaseModel):
     device_id: str
     name: str
@@ -40,6 +43,8 @@ class Profile(BaseModel):
     weight: float
     sport: str
     target_zone: Optional[str] = None  # None | "BLUE" | "GREEN"
+    terms_accepted_at: Optional[str] = None
+    terms_version: Optional[str] = None
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -50,6 +55,11 @@ class ProfileIn(BaseModel):
     weight: float
     sport: str
     target_zone: Optional[str] = None
+
+
+class AcceptTermsIn(BaseModel):
+    device_id: str
+    version: Optional[str] = None  # defaults to server TERMS_VERSION
 
 
 class FCPv(BaseModel):
@@ -166,18 +176,79 @@ async def root():
         "upstream_configured": upstream_configured,
         "calc_source_default": "authoritative" if upstream_configured else "pending",
         "pending_notice": PENDING_NOTICE if not upstream_configured else None,
+        "terms_version": TERMS_VERSION,
+        "license": "AFEtm Mobile — Personal Use Only",
     }
 
 
 @api_router.post("/profile", response_model=Profile)
 async def upsert_profile(p: ProfileIn):
+    """Upsert a personal profile.
+
+    LICENSING RULE (Personal Use Only): A profile represents the ONE person
+    who owns the device. There is no roster / no team / no third-party
+    athlete concept in the mobile app. The `device_id` is the sole ownership
+    key. Callers must have accepted the Terms of Use before any assessment
+    can be created (see /assessments enforcement).
+    """
+    existing = await db.profiles.find_one({"device_id": p.device_id}, {"_id": 0})
     doc = p.model_dump()
     doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+    # Preserve prior terms acceptance across profile edits.
+    if existing:
+        doc["terms_accepted_at"] = existing.get("terms_accepted_at")
+        doc["terms_version"] = existing.get("terms_version")
+    else:
+        doc.setdefault("terms_accepted_at", None)
+        doc.setdefault("terms_version", None)
     await db.profiles.update_one(
         {"device_id": p.device_id},
         {"$set": doc},
         upsert=True,
     )
+    return Profile(**doc)
+
+
+@api_router.post("/profile/accept-terms", response_model=Profile)
+async def accept_terms(payload: AcceptTermsIn):
+    """Record acceptance of the AFEtm Mobile Personal-Use Terms.
+
+    Stores `terms_accepted_at` (ISO timestamp) + `terms_version` on the
+    profile document. This endpoint is idempotent: subsequent calls simply
+    refresh the acceptance timestamp / version.
+
+    NOTE: This does not require a pre-existing profile — the acceptance can
+    happen BEFORE the profile setup step in onboarding. We create a stub
+    profile row (name empty, age/weight 0) whose `terms_accepted_at` is set,
+    and later /profile POST enriches it with the athlete data.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    version = payload.version or TERMS_VERSION
+    existing = await db.profiles.find_one({"device_id": payload.device_id}, {"_id": 0})
+    if existing:
+        update = {
+            "terms_accepted_at": now,
+            "terms_version": version,
+            "updated_at": now,
+        }
+        await db.profiles.update_one({"device_id": payload.device_id}, {"$set": update})
+        existing.update(update)
+        return Profile(**existing)
+    # Create a stub row so subsequent gating can rely on the profile
+    # existing. The client MUST still complete profile setup afterwards.
+    doc = {
+        "device_id": payload.device_id,
+        "name": "",
+        "age": 0,
+        "weight": 0.0,
+        "sport": "",
+        "target_zone": None,
+        "terms_accepted_at": now,
+        "terms_version": version,
+        "updated_at": now,
+    }
+    await db.profiles.insert_one(doc.copy())
+    doc.pop("_id", None)
     return Profile(**doc)
 
 
@@ -258,6 +329,67 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
     return derived, None
 
 
+async def _require_owned_profile(device_id: str) -> dict:
+    """Personal-use enforcement helper.
+
+    Ensures the caller device_id corresponds to an existing profile that
+    HAS accepted the Terms of Use. Returns the profile document. Raises
+    the appropriate HTTP error otherwise. All /assessments mutations use
+    this to guarantee `authenticatedUserId (device_id) == evaluatedPersonId`.
+    """
+    prof = await db.profiles.find_one({"device_id": device_id}, {"_id": 0})
+    if not prof:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERSONAL_USE_PROFILE_REQUIRED",
+                "message": (
+                    "AFEtm Mobile is licensed for personal use only. "
+                    "A personal profile must exist on this device before "
+                    "creating or accessing assessments."
+                ),
+            },
+        )
+    if not prof.get("terms_accepted_at"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERSONAL_USE_TERMS_REQUIRED",
+                "message": (
+                    "You must accept the AFEtm Mobile Personal-Use Terms "
+                    "before continuing."
+                ),
+                "terms_version": TERMS_VERSION,
+            },
+        )
+    return prof
+
+
+async def _require_owned_assessment(aid: str, device_id: str) -> dict:
+    """Reject any attempt to read/modify an assessment owned by another
+    device. This is the server-side backstop for the mobile
+    Personal-Use-Only rule; the mobile client never has any UI to change
+    the device_id, but the API must still refuse to leak or mutate
+    records that belong to someone else.
+    """
+    doc = await db.assessments.find_one({"id": aid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Assessment not found")
+    if doc.get("device_id") != device_id:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERSONAL_USE_OWNERSHIP_VIOLATION",
+                "message": (
+                    "AFEtm Mobile is licensed for personal use only. "
+                    "You cannot access, modify, or delete assessments "
+                    "that belong to another person or device."
+                ),
+            },
+        )
+    return doc
+
+
 @api_router.post("/assessments", response_model=Assessment)
 async def create_assessment(a: AssessmentIn):
     """Create a new assessment.
@@ -273,7 +405,28 @@ async def create_assessment(a: AssessmentIn):
       2. When the upstream is UNCONFIGURED, the record is saved with raw
          measurements + documented math and ``calc_source: "pending"``.
       3. Under NO circumstances do we generate a local Blue/Green/Yellow/Red.
+
+    PERSONAL-USE ENFORCEMENT: Requires an existing profile owned by
+    ``a.device_id`` that has accepted the current Terms of Use. Any
+    attempt to submit an assessment for a different device / person is
+    rejected with HTTP 403.
     """
+    # Personal-use enforcement: only the owner of the profile can create.
+    profile = await _require_owned_profile(a.device_id)
+    # Extra safety: the age used to compute FCP must match the profile's age.
+    # Mismatches are treated as an ownership violation (someone is trying to
+    # submit for a different person).
+    if profile.get("age") and abs(int(profile["age"]) - int(a.age)) > 1:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERSONAL_USE_AGE_MISMATCH",
+                "message": (
+                    "Assessment age does not match the personal profile. "
+                    "AFEtm Mobile is licensed for personal use only."
+                ),
+            },
+        )
     math = calc_math_only(a.fcr, a.age, a.readings, a.fcpv.model_dump())
     upstream_configured = bool(AUTHORITATIVE_UPSTREAM_URL and AUTHORITATIVE_UPSTREAM_TOKEN)
     if upstream_configured:
@@ -329,16 +482,18 @@ async def create_assessment(a: AssessmentIn):
 
 
 @api_router.post("/assessments/{aid}/resync", response_model=Assessment)
-async def resync_assessment(aid: str):
+async def resync_assessment(aid: str, device_id: str = Query(...)):
     """Retry authoritative classification for a pending assessment.
 
     Useful when the assessment was captured while the upstream was
     unavailable. This does NOT invent a zone; it only replaces the
     pending status if the upstream now returns a valid result.
+
+    PERSONAL-USE ENFORCEMENT: The caller device_id MUST match the owner
+    of the assessment. Requests from any other device are rejected 403.
     """
-    doc = await db.assessments.find_one({"id": aid}, {"_id": 0})
-    if not doc:
-        raise HTTPException(404, "Evaluación no encontrada")
+    await _require_owned_profile(device_id)
+    doc = await _require_owned_assessment(aid, device_id)
     if doc.get("calc_source") == "authoritative":
         return Assessment(**doc)
     # Rebuild the input from the stored raw data.
@@ -389,18 +544,24 @@ async def list_assessments(device_id: str = Query(...), limit: int = 100):
 
 
 @api_router.get("/assessments/{aid}", response_model=Assessment)
-async def get_assessment(aid: str):
-    doc = await db.assessments.find_one({"id": aid}, {"_id": 0})
-    if not doc:
-        raise HTTPException(404, "Evaluación no encontrada")
+async def get_assessment(aid: str, device_id: str = Query(...)):
+    """Fetch an assessment.
+
+    PERSONAL-USE ENFORCEMENT: Only the owner device may read the record.
+    Any other device receives HTTP 403 — prevents cross-device / cross
+    account data leakage even if someone guesses an assessment id.
+    """
+    doc = await _require_owned_assessment(aid, device_id)
     return Assessment(**doc)
 
 
 @api_router.delete("/assessments/{aid}")
-async def delete_assessment(aid: str):
-    res = await db.assessments.delete_one({"id": aid})
+async def delete_assessment(aid: str, device_id: str = Query(...)):
+    """Delete an assessment. Restricted to the owning device."""
+    await _require_owned_assessment(aid, device_id)
+    res = await db.assessments.delete_one({"id": aid, "device_id": device_id})
     if res.deleted_count == 0:
-        raise HTTPException(404, "Evaluación no encontrada")
+        raise HTTPException(404, "Assessment not found")
     return {"deleted": True}
 
 

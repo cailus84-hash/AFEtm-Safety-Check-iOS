@@ -116,6 +116,26 @@ export default function ProfileTab() {
             />
           </Pressable>
 
+          {/* Personal-Use License card */}
+          <View style={styles.licenseCard} testID="profile-license-card">
+            <View style={styles.licenseHead}>
+              <View style={styles.licenseIcon}>
+                <MaterialCommunityIcons name="shield-lock-outline" size={16} color={colors.brandGold} />
+              </View>
+              <Text style={styles.licenseTitle}>{t('profile.license.title')}</Text>
+            </View>
+            <Text style={styles.licenseBody}>{t('profile.license.body')}</Text>
+            <Pressable
+              testID="profile-institutional-btn"
+              onPress={() => router.push('/institutional')}
+              style={({ pressed }) => [styles.licenseBtn, pressed && { opacity: 0.9 }]}
+            >
+              <MaterialCommunityIcons name="office-building-outline" size={14} color={colors.brandGold} />
+              <Text style={styles.licenseBtnText}>{t('profile.license.cta')}</Text>
+              <MaterialCommunityIcons name="chevron-right" size={16} color={colors.onSurfaceTertiary} />
+            </Pressable>
+          </View>
+
           {/* Language switcher */}
           <View style={[shared.card, { marginTop: spacing.xl }]} testID="profile-language-card">
             <View style={styles.langHead}>
@@ -301,4 +321,29 @@ const styles = StyleSheet.create({
   langLabel: { color: colors.onSurface, fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
   langCode: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   langHint: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 15, marginTop: spacing.md },
+  licenseCard: {
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    shadowColor: colors.brandGold, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4,
+  },
+  licenseHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  licenseIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  licenseTitle: { color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  licenseBody: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 17 },
+  licenseBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  licenseBtnText: { flex: 1, color: colors.brandGold, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
 });

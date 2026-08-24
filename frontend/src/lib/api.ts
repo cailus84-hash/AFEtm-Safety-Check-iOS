@@ -29,6 +29,8 @@ export type Profile = {
   weight: number;
   sport: string;
   target_zone?: 'BLUE' | 'GREEN' | null;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
   updated_at?: string;
 };
 
@@ -125,6 +127,13 @@ export async function saveProfile(p: Omit<Profile, 'updated_at'>) {
   return req<Profile>('/profile', { method: 'POST', body: JSON.stringify(p) });
 }
 
+export async function acceptTerms(deviceId: string, version = '1.0') {
+  return req<Profile>('/profile/accept-terms', {
+    method: 'POST',
+    body: JSON.stringify({ device_id: deviceId, version }),
+  });
+}
+
 export async function fetchProfile(deviceId: string) {
   return req<Profile | null>(`/profile?device_id=${encodeURIComponent(deviceId)}`);
 }
@@ -143,14 +152,20 @@ export async function listAssessments(deviceId: string) {
   return req<Assessment[]>(`/assessments?device_id=${encodeURIComponent(deviceId)}`);
 }
 
-export async function getAssessment(id: string) {
-  return req<Assessment>(`/assessments/${id}`);
+export async function getAssessment(id: string, deviceId: string) {
+  return req<Assessment>(`/assessments/${id}?device_id=${encodeURIComponent(deviceId)}`);
 }
 
-export async function deleteAssessment(id: string) {
-  return req<{ deleted: boolean }>(`/assessments/${id}`, { method: 'DELETE' });
+export async function deleteAssessment(id: string, deviceId: string) {
+  return req<{ deleted: boolean }>(
+    `/assessments/${id}?device_id=${encodeURIComponent(deviceId)}`,
+    { method: 'DELETE' }
+  );
 }
 
-export async function resyncAssessment(id: string) {
-  return req<Assessment>(`/assessments/${id}/resync`, { method: 'POST' });
+export async function resyncAssessment(id: string, deviceId: string) {
+  return req<Assessment>(
+    `/assessments/${id}/resync?device_id=${encodeURIComponent(deviceId)}`,
+    { method: 'POST' }
+  );
 }

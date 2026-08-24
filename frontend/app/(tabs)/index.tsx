@@ -49,7 +49,19 @@ export default function Home() {
         fetchProfile(id),
         listAssessments(id),
       ]);
+      // Personal-use gates:
+      //   1. No profile at all → onboarding.
+      //   2. Profile exists but Terms not accepted → send back to terms.
+      //   3. Profile is a stub (accept-terms only, no name yet) → setup.
       if (!p) {
+        router.replace('/');
+        return;
+      }
+      if (!p.terms_accepted_at) {
+        router.replace('/terms');
+        return;
+      }
+      if (!p.name) {
         router.replace('/profile-setup');
         return;
       }
