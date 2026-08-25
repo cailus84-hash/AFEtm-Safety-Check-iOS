@@ -306,7 +306,9 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         "Authorization": f"Bearer {AUTHORITATIVE_UPSTREAM_TOKEN}",
     }
     payload = {
-        "fcr": a.fcr,
+        # Replit AFEtm engine expects `restingHr` (not `fcr`) for the
+        # resting heart-rate field. Value is unchanged — mapping only.
+        "restingHr": a.fcr,
         "age": a.age,
         "readings": a.readings,
         "fcpv": a.fcpv.model_dump(),
