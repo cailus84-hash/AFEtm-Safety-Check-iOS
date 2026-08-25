@@ -309,6 +309,11 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         # Replit AFEtm engine expects `restingHr` (not `fcr`) for the
         # resting heart-rate field. Value is unchanged — mapping only.
         "restingHr": a.fcr,
+        # Raw physiological input required by the authoritative engine:
+        # maxHr = 220 - age. Emergent only forwards this arithmetic
+        # derivation — the authoritative TARGET HR (0.8 × maxHr) is
+        # computed by and read back from Replit.
+        "maxHr": 220 - a.age,
         "age": a.age,
         "readings": a.readings,
         "fcpv": a.fcpv.model_dump(),
@@ -337,7 +342,15 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
             "upstream_body": r.text[:2000],
         }
     derived = {
-        "fcp_target": data.get("fcp_target") or data.get("fcp"),
+        # Authoritative TARGET HR (a.k.a. FCP / HRP / targetHr) — must
+        # come from Replit's calculation. Accept the canonical alternate
+        # field names Replit may use. Emergent never invents this value.
+        "fcp_target": (
+            data.get("fcp_target")
+            or data.get("targetHr")
+            or data.get("HRP")
+            or data.get("fcp")
+        ),
         "hr_peak": data.get("hr_peak") or a.readings.get("0"),
         "hrr": data.get("hrr"),
         "recpct": data.get("recpct"),
