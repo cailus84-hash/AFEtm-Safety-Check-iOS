@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { fetchProfile, getDeviceId, saveProfile } from '@/src/lib/api';
 import { useI18n } from '@/src/lib/i18n';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SPORT_KEYS = ['running', 'cycling', 'football', 'crossfit', 'swimming', 'other'] as const;
 // Canonical (English) values stored in the backend.
@@ -88,7 +89,16 @@ export default function ProfileSetup() {
         sport,
         target_zone: targetZone === 'NONE' ? null : targetZone,
       });
-      router.replace('/(tabs)');
+      // First time here → send the athlete through the introduction tour
+      // before landing on the tabs. Skipping / finishing the tour marks
+      // it as seen so we never show it automatically again.
+      let seen: string | null = null;
+      try { seen = await AsyncStorage.getItem('afetm.tourSeen'); } catch {}
+      if (seen === '1') {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/tour');
+      }
     } catch (e: any) {
       setError(e?.message || t('setup.error.save'));
     } finally {

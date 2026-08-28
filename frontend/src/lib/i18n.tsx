@@ -27,6 +27,38 @@ const dict = {
     'onboarding.hero.alt': 'AFE™ Visual Color Guide',
     'onboarding.hero.badge': 'OFFICIAL VISUAL GUIDE',
 
+    // Introduction tour (shown once after profile setup; reopenable from Profile)
+    'tour.skip': 'Skip',
+    'tour.continue': 'Continue',
+    'tour.start': 'Start evaluation',
+    'tour.step': '{n} / {total}',
+    // Slide 1 — What is it
+    'tour.s1.eyebrow': 'PREVENTIVE, NOT CLINICAL',
+    'tour.s1.title': 'AFEtm Safety Check',
+    'tour.s1.body':
+      'A preventive, non-clinical check that observes your cardiac recovery before continuing training or competition.',
+    'tour.s1.foot': 'Does not diagnose diseases and does not replace professional evaluation.',
+    // Slide 2 — How it works
+    'tour.s2.eyebrow': 'HOW DOES IT WORK',
+    'tour.s2.title': 'Three simple steps',
+    'tour.s2.step1': 'Reach the target heart rate indicated by the system.',
+    'tour.s2.step2': 'Sit down and recover during 180 seconds.',
+    'tour.s2.step3': 'Receive a color-based result with preventive guidance.',
+    // Slide 3 — Colors
+    'tour.s3.eyebrow': 'YOUR RESULT',
+    'tour.s3.title': 'What your result means',
+    'tour.s3.blue': 'Optimal. Very favorable recovery.',
+    'tour.s3.green': 'Favorable. You can continue with usual observation.',
+    'tour.s3.yellow':
+      'Adjust. Better to moderate load, extend recovery and re-check.',
+    'tour.s3.red':
+      'Stop and re-check. Avoid intense effort and follow the corresponding safety protocol.',
+    'tour.s3.footer':
+      'The most important decisions are made before the first repetition.',
+    // Profile card entry to re-open the tour
+    'profile.tour.title': 'Introduction tour',
+    'profile.tour.body': 'Watch the 3-slide introduction again.',
+
     // Terms of Personal Use — mandatory acceptance
     'terms.eyebrow': 'LICENSING · PERSONAL USE',
     'terms.title': 'Personal Use Only',
@@ -492,6 +524,34 @@ const dict = {
       'No es una aplicación de diagnóstico médico. No sustituye la evaluación profesional.',
     'onboarding.hero.alt': 'Guía Visual de Colores AFE™',
     'onboarding.hero.badge': 'GUÍA VISUAL OFICIAL',
+
+    // Tour de introducción
+    'tour.skip': 'Saltar',
+    'tour.continue': 'Continuar',
+    'tour.start': 'Comenzar evaluación',
+    'tour.step': '{n} / {total}',
+    'tour.s1.eyebrow': 'PREVENTIVO, NO CLÍNICO',
+    'tour.s1.title': 'AFEtm Safety Check',
+    'tour.s1.body':
+      'Chequeo preventivo, no clínico, que observa tu recuperación cardiaca antes de continuar con entrenamiento o competencia.',
+    'tour.s1.foot': 'No diagnostica enfermedades ni reemplaza evaluación profesional.',
+    'tour.s2.eyebrow': '¿CÓMO FUNCIONA?',
+    'tour.s2.title': 'Tres pasos simples',
+    'tour.s2.step1': 'Alcanza la frecuencia cardiaca objetivo indicada por el sistema.',
+    'tour.s2.step2': 'Siéntate y recupera durante 180 segundos.',
+    'tour.s2.step3': 'Recibe un resultado por color con orientación preventiva.',
+    'tour.s3.eyebrow': 'TU RESULTADO',
+    'tour.s3.title': '¿Qué significa tu resultado?',
+    'tour.s3.blue': 'Óptimo. Recuperación muy favorable.',
+    'tour.s3.green': 'Favorable. Puedes continuar con observación habitual.',
+    'tour.s3.yellow':
+      'Ajustar. Conviene moderar carga, ampliar recuperación y reevaluar.',
+    'tour.s3.red':
+      'Detener y reevaluar. Evita exigencia intensa y sigue el protocolo de seguridad correspondiente.',
+    'tour.s3.footer':
+      'Las decisiones más importantes se toman antes de la primera repetición.',
+    'profile.tour.title': 'Tour de introducción',
+    'profile.tour.body': 'Vuelve a ver la introducción de 3 pantallas.',
 
     // Términos de uso personal
     'terms.eyebrow': 'LICENCIA · USO PERSONAL',

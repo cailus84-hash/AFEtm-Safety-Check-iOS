@@ -116,6 +116,27 @@ export default function ProfileTab() {
             />
           </Pressable>
 
+          {/* Re-open the 3-slide introduction tour. Uses ?force=1 so
+              AsyncStorage seen state is preserved. */}
+          <Pressable
+            testID="profile-tour-btn"
+            style={[styles.editBtn, { marginTop: spacing.md, justifyContent: 'flex-start' }]}
+            onPress={() => router.push('/tour?force=1')}
+          >
+            <MaterialCommunityIcons name="compass-outline" size={18} color={colors.zoneGreen} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.editBtnText, { color: colors.onSurface }]}>
+                {t('profile.tour.title')}
+              </Text>
+              <Text style={styles.tourHint}>{t('profile.tour.body')}</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={18}
+              color={colors.onSurfaceTertiary}
+            />
+          </Pressable>
+
           {/* Personal-Use License card */}
           <View style={styles.licenseCard} testID="profile-license-card">
             <View style={styles.licenseHead}>
@@ -295,6 +316,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
   },
   editBtnText: { color: colors.onSurface, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  tourHint: { color: colors.onSurfaceTertiary, fontSize: 11, marginTop: 2 },
   infoTitle: { color: colors.onSurface, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
   bulletRow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md,

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Assessment,
   Profile,
@@ -71,6 +72,15 @@ export default function Home() {
         router.replace('/profile-setup');
         return;
       }
+      // First-time athletes must go through the 3-slide introduction
+      // tour once. Reopenable later from Profile → "Introduction tour".
+      try {
+        const seen = await AsyncStorage.getItem('afetm.tourSeen');
+        if (seen !== '1') {
+          router.replace('/tour');
+          return;
+        }
+      } catch {}
       setProfile(p);
       setAssessments(list);
     } catch {
