@@ -305,17 +305,35 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         "Content-Type": "application/json",
         "Authorization": f"Bearer {AUTHORITATIVE_UPSTREAM_TOKEN}",
     }
+    # Replit AFEtm engine schema (authoritative). Emergent only forwards
+    # captured data; Replit remains the calculation + classification
+    # engine. Field mapping (see doc from user 2026-08-24):
+    #   age               → athlete age
+    #   restingHr         → resting HR (a.fcr)
+    #   maxHr             → *actual measured peak HR* reached during
+    #                       the assessment (readings at t=0s, i.e. peak
+    #                       at the end of effort). Not the theoretical
+    #                       220-age; that would be a different value.
+    #   hr60s, hr90s,
+    #   hr120s, hr150s    → recovery-window readings.
+    #   hr3m              → HR at 180 s (mapped to `hr3m`, not `hr180s`).
+    #   safetyConfirmed   → true once the athlete completed the safety
+    #                       screening in-app.
+    #   safetyConfirmedAt → ISO 8601 timestamp WITH timezone.
+    peak_hr = a.readings.get("0")
+    safety_confirmed_at = datetime.now(timezone.utc).isoformat()
     payload = {
-        # Replit AFEtm engine expects `restingHr` (not `fcr`) for the
-        # resting heart-rate field. Value is unchanged — mapping only.
-        "restingHr": a.fcr,
-        # Raw physiological input required by the authoritative engine:
-        # maxHr = 220 - age. Emergent only forwards this arithmetic
-        # derivation — the authoritative TARGET HR (0.8 × maxHr) is
-        # computed by and read back from Replit.
-        "maxHr": 220 - a.age,
         "age": a.age,
-        "readings": a.readings,
+        "restingHr": a.fcr,
+        "maxHr": peak_hr,
+        "hr60s": a.readings.get("60"),
+        "hr90s": a.readings.get("90"),
+        "hr120s": a.readings.get("120"),
+        "hr150s": a.readings.get("150"),
+        "hr3m": a.readings.get("180"),
+        "safetyConfirmed": True,
+        "safetyConfirmedAt": safety_confirmed_at,
+        # Extra context passed through — Replit may ignore unknown fields.
         "fcpv": a.fcpv.model_dump(),
     }
     try:
