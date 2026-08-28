@@ -213,16 +213,29 @@ export default function Terms() {
             <Checkbox testID="terms-chk-terms" checked={c3} onToggle={() => setC3((v) => !v)} label={t('terms.checkbox.terms')} />
 
             <View style={styles.instCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.instTitle}>{t('terms.institutional.cta')}</Text>
-                <Text style={styles.instHint}>{t('inst.contact.hint')}</Text>
+              <View style={styles.instCardHeader}>
+                <MaterialCommunityIcons
+                  name="office-building-outline"
+                  size={16}
+                  color={colors.brandGold}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.instTitle} numberOfLines={2}>
+                    {t('terms.institutional.cta')}
+                  </Text>
+                  <Text style={styles.instHint} numberOfLines={2}>
+                    {t('inst.contact.hint')}
+                  </Text>
+                </View>
               </View>
               <Pressable
-                style={styles.instBtn}
+                style={({ pressed }) => [styles.instBtn, pressed && { opacity: 0.85 }]}
                 onPress={() => router.push('/institutional')}
                 testID="terms-institutional-link"
               >
-                <Text style={styles.instBtnText}>{t('terms.institutional.link')}</Text>
+                <Text style={styles.instBtnText} numberOfLines={1}>
+                  {t('terms.institutional.link')}
+                </Text>
                 <MaterialCommunityIcons name="arrow-top-right" size={14} color={colors.brandGold} />
               </Pressable>
             </View>
@@ -375,16 +388,23 @@ const styles = StyleSheet.create({
   },
   checkboxLabel: { color: colors.onSurface, fontSize: 13, lineHeight: 19, flex: 1 },
   instCard: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    // Stack the card vertically so the CTA never squeezes the title
+    // into a 1-char column on narrow screens (regression seen in ES).
+    flexDirection: 'column',
+    gap: spacing.sm,
     marginTop: spacing.xl,
     padding: spacing.md,
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceSecondary,
   },
+  instCardHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+  },
   instTitle: { color: colors.onSurface, fontSize: 13, fontWeight: '800' },
   instHint: { color: colors.onSurfaceTertiary, fontSize: 11, marginTop: 2 },
   instBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    alignSelf: 'stretch',
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brandGold,
     backgroundColor: '#1F1B10',
