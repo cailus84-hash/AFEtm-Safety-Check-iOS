@@ -43,6 +43,9 @@ export default function Home() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // License reminder — shown on the 1st of every month, once per month.
+  // Dismissal is per YYYY-MM so the reminder returns next month.
+  const [showLicenseReminder, setShowLicenseReminder] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +84,22 @@ export default function Home() {
           return;
         }
       } catch {}
+
+      // License reminder — visible on the 1st of every month unless the
+      // athlete already dismissed it for this month.
+      try {
+        const now = new Date();
+        if (now.getDate() === 1) {
+          const key = `afetm.licenseReminderDismissed.${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const dismissed = await AsyncStorage.getItem(key);
+          setShowLicenseReminder(dismissed !== '1');
+        } else {
+          setShowLicenseReminder(false);
+        }
+      } catch {
+        setShowLicenseReminder(false);
+      }
+
       setProfile(p);
       setAssessments(list);
     } catch {
@@ -96,6 +115,15 @@ export default function Home() {
       load();
     }, [load])
   );
+
+  const dismissLicenseReminder = useCallback(async () => {
+    setShowLicenseReminder(false);
+    try {
+      const now = new Date();
+      const key = `afetm.licenseReminderDismissed.${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      await AsyncStorage.setItem(key, '1');
+    } catch {}
+  }, []);
 
   const fcpTarget = profile ? Math.round(0.8 * (220 - profile.age)) : 0;
   const last = assessments[0] ?? null;
@@ -134,6 +162,67 @@ export default function Home() {
             <Text style={styles.badgeText}>{t('home.badge')}</Text>
           </View>
         </View>
+
+        {/* Monthly Personal-license reminder — 1st of the month only,
+            dismissible for the rest of the month. */}
+        {showLicenseReminder && (
+          <View style={styles.licenseReminder} testID="home-license-reminder">
+            <View style={styles.licenseReminderMain}>
+              <View style={styles.licenseReminderIcon}>
+                <MaterialCommunityIcons
+                  name="shield-lock-outline"
+                  size={16}
+                  color={colors.brandGold}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.licenseReminderEyebrow}>
+                  {t('home.license.eyebrow')}
+                </Text>
+                <Text style={styles.licenseReminderTitle}>
+                  {t('home.license.title')}
+                </Text>
+                <Text style={styles.licenseReminderBody}>
+                  {t('home.license.body')}
+                </Text>
+              </View>
+              <Pressable
+                testID="home-license-reminder-dismiss"
+                onPress={dismissLicenseReminder}
+                hitSlop={10}
+                style={styles.licenseReminderClose}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={16}
+                  color={colors.onSurfaceTertiary}
+                />
+              </Pressable>
+            </View>
+            <Pressable
+              testID="home-license-reminder-cta"
+              onPress={() => router.push('/institutional')}
+              style={({ pressed }) => [
+                styles.licenseReminderCta,
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="office-building-outline"
+                size={13}
+                color={colors.brandGold}
+              />
+              <Text style={styles.licenseReminderCtaText}>
+                {t('home.license.cta')}
+              </Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={14}
+                color={colors.onSurfaceTertiary}
+              />
+            </Pressable>
+          </View>
+        )}
 
         {loading ? (
           <View style={{ marginTop: spacing.xxl, alignItems: 'center' }}>
@@ -363,6 +452,47 @@ const styles = StyleSheet.create({
     backgroundColor: '#141310',
   },
   badgeText: { color: colors.brandGold, fontSize: 10, letterSpacing: 1, fontWeight: '700' },
+  // License reminder card (1st of the month, subtle gold outline)
+  licenseReminder: {
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    shadowColor: colors.brandGold, shadowOpacity: 0.22, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 }, elevation: 3,
+  },
+  licenseReminderMain: {
+    flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+  },
+  licenseReminderIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 2,
+  },
+  licenseReminderEyebrow: {
+    color: colors.brandGold, fontSize: 9, letterSpacing: 1.5, fontWeight: '800',
+    marginBottom: 2,
+  },
+  licenseReminderTitle: {
+    color: colors.onSurface, fontSize: 13, fontWeight: '800', marginBottom: 4,
+  },
+  licenseReminderBody: {
+    color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 16,
+  },
+  licenseReminderClose: {
+    width: 24, height: 24, alignItems: 'center', justifyContent: 'center',
+  },
+  licenseReminderCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: spacing.sm, paddingTop: spacing.sm,
+    borderTopWidth: 1, borderTopColor: colors.divider,
+  },
+  licenseReminderCtaText: {
+    flex: 1, color: colors.brandGold, fontSize: 11, fontWeight: '800', letterSpacing: 0.5,
+  },
   heroCard: {
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.lg,

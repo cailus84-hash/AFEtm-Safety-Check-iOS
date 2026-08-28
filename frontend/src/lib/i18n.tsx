@@ -174,6 +174,13 @@ const dict = {
     'home.disclaimer':
       'Preventive tool. Not a medical diagnostic application. Does not replace a health professional.',
     'home.meta.pattern': 'Pattern {name}',
+    // License reminder — shown on the 1st of every month on Home
+    'home.license.eyebrow': 'MONTHLY REMINDER',
+    'home.license.title': "You're on a Personal license",
+    'home.license.body':
+      'AFEtm Mobile is for your personal use only. Institutional or team use requires a WeWon license.',
+    'home.license.cta': 'Institutional access',
+    'home.license.dismiss': 'Dismiss',
 
     // New choice screen
     'new.eyebrow': 'NEW SAFETY CHECK',
@@ -662,6 +669,12 @@ const dict = {
     'home.disclaimer':
       'Herramienta preventiva. No es una aplicación de diagnóstico médico ni sustituye a un profesional de la salud.',
     'home.meta.pattern': 'Patrón {name}',
+    'home.license.eyebrow': 'RECORDATORIO MENSUAL',
+    'home.license.title': 'Tienes una licencia Personal',
+    'home.license.body':
+      'AFEtm Mobile es solo para tu uso personal. El uso institucional o de equipo requiere una licencia WeWon.',
+    'home.license.cta': 'Acceso institucional',
+    'home.license.dismiss': 'Descartar',
 
     'new.eyebrow': 'NUEVO SAFETY CHECK',
     'new.title': 'Elige el modo',
