@@ -29,6 +29,16 @@ AUTHORITATIVE_UPSTREAM_URL = (os.environ.get('AUTHORITATIVE_UPSTREAM_URL') or ''
 AUTHORITATIVE_UPSTREAM_TOKEN = os.environ.get('AUTHORITATIVE_UPSTREAM_TOKEN') or ''
 
 app = FastAPI(title="AFEtm Safety Check API")
+
+
+# Deployment health probe. Deployed environments hit `/health` (no
+# prefix) to verify the pod is ready — kept intentionally free of any
+# business logic, auth, DB access or `/api/*` contract change.
+@app.get("/health")
+async def health_probe():
+    return {"status": "ok", "service": "AFEtm Safety Check"}
+
+
 api_router = APIRouter(prefix="/api")
 
 
