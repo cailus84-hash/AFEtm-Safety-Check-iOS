@@ -181,6 +181,79 @@ const dict = {
       'AFEtm Mobile is for your personal use only. Institutional or team use requires a WeWon license.',
     'home.license.cta': 'Institutional access',
     'home.license.dismiss': 'Dismiss',
+    // Paywall & subscription
+    'paywall.eyebrow': 'AFE™ PERSONAL',
+    'paywall.title': 'Full access to AFEtm Safety Check',
+    'paywall.subtitle':
+      'Preventive check-ins before every training or competition — the informed decision starts here.',
+    'paywall.trialBadge': '1 MONTH FREE',
+    'paywall.benefit.assessments': 'Unlimited AFEtm Safety Checks',
+    'paywall.benefit.history': 'Personal history and detail charts',
+    'paywall.benefit.compare': 'Session comparison and trends',
+    'paywall.benefit.recovery': 'Recovery follow-up and reminders',
+    'paywall.plan.monthly.title': 'Monthly plan',
+    'paywall.plan.monthly.price': '$19.99 / month',
+    'paywall.plan.yearly.title': 'Yearly plan',
+    'paywall.plan.yearly.price': '$199.99 / year',
+    'paywall.plan.yearly.badge': 'BEST VALUE',
+    'paywall.plan.yearly.save': 'Save {p}% vs monthly',
+    'paywall.cta.trial': 'Start 1-month free trial',
+    'paywall.cta.monthly': 'Choose monthly plan',
+    'paywall.cta.yearly': 'Choose yearly plan',
+    'paywall.restore': 'Restore purchases',
+    'paywall.legal.tool':
+      'AFEtm Safety Check is a preventive and educational tool. It is not clinical.',
+    'paywall.legal.renew':
+      'Subscription renews automatically unless cancelled from the corresponding store.',
+    'paywall.error.trial': 'Could not start the free trial.',
+    'paywall.error.purchase': 'Could not complete the purchase.',
+    'paywall.error.restore': 'Could not restore purchases.',
+    'paywall.trialUsed':
+      'The free trial has already been used on this device. Choose a plan to continue.',
+    'paywall.success.trial': 'Free trial activated. Enjoy your access!',
+    'paywall.success.purchase': 'Subscription active. Thank you!',
+    'paywall.dismiss': 'Not now',
+
+    // Manage subscription
+    'manage.title': 'Manage subscription',
+    'manage.status': 'STATUS',
+    'manage.status.trial': 'Free trial',
+    'manage.status.active': 'Active',
+    'manage.status.expired': 'Expired',
+    'manage.status.none': 'No active plan',
+    'manage.plan': 'PLAN',
+    'manage.plan.monthly': 'Monthly · $19.99 / month',
+    'manage.plan.yearly': 'Yearly · $199.99 / year',
+    'manage.plan.trial': 'Free trial (1 month)',
+    'manage.plan.none': '—',
+    'manage.expires': 'RENEWS / EXPIRES',
+    'manage.expires.none': '—',
+    'manage.expires.in': 'In {n} days',
+    'manage.expires.past': 'Expired',
+    'manage.cancel': 'Cancel subscription',
+    'manage.cancel.hint':
+      'Cancelling here records your intent — the actual cancellation happens on the store where you subscribed.',
+    'manage.canceled.badge': 'Cancelled',
+    'manage.canceled.body':
+      'You cancelled on {date}. Access remains until {expires}.',
+    'manage.restore': 'Restore purchases',
+    'manage.legal':
+      'Subscription renews automatically unless cancelled from the corresponding store (App Store or Google Play).',
+    'manage.upgrade': 'Change plan',
+    'manage.pill.expiresAt': 'Until {date}',
+
+    // Profile entry
+    'profile.subscription.title': 'Manage subscription',
+    'profile.subscription.body': 'Plan, renewal and cancellation.',
+
+    // Home gate banner
+    'home.subscription.gate.title': 'Subscription required',
+    'home.subscription.gate.body':
+      'Your free trial has ended. Choose a plan to keep taking AFE™ Safety Checks.',
+    'home.subscription.gate.cta': 'View plans',
+    'home.subscription.gate.trialCta': 'Start 1-month free trial',
+    'home.subscription.trial.pill': '{n} days left of free trial',
+    'home.subscription.active.pill': 'Active plan',
 
     // New choice screen
     'new.eyebrow': 'NEW SAFETY CHECK',
@@ -675,6 +748,75 @@ const dict = {
       'AFEtm Mobile es solo para tu uso personal. El uso institucional o de equipo requiere una licencia WeWon.',
     'home.license.cta': 'Acceso institucional',
     'home.license.dismiss': 'Descartar',
+    'paywall.eyebrow': 'AFE™ PERSONAL',
+    'paywall.title': 'Acceso completo a AFEtm Safety Check',
+    'paywall.subtitle':
+      'Chequeos preventivos antes de cada entrenamiento o competencia — la decisión informada empieza aquí.',
+    'paywall.trialBadge': '1 MES GRATIS',
+    'paywall.benefit.assessments': 'Evaluaciones AFEtm Safety Check ilimitadas',
+    'paywall.benefit.history': 'Historial personal y gráficas de detalle',
+    'paywall.benefit.compare': 'Comparación de sesiones y tendencias',
+    'paywall.benefit.recovery': 'Seguimiento de recuperación y recordatorios',
+    'paywall.plan.monthly.title': 'Plan mensual',
+    'paywall.plan.monthly.price': '$19.99 / mes',
+    'paywall.plan.yearly.title': 'Plan anual',
+    'paywall.plan.yearly.price': '$199.99 / año',
+    'paywall.plan.yearly.badge': 'MEJOR VALOR',
+    'paywall.plan.yearly.save': 'Ahorra {p}% vs mensual',
+    'paywall.cta.trial': 'Iniciar prueba gratis de 1 mes',
+    'paywall.cta.monthly': 'Elegir plan mensual',
+    'paywall.cta.yearly': 'Elegir plan anual',
+    'paywall.restore': 'Restaurar compras',
+    'paywall.legal.tool':
+      'AFEtm Safety Check es una herramienta preventiva y educativa, no clínica.',
+    'paywall.legal.renew':
+      'La suscripción se renueva automáticamente salvo cancelación desde la tienda correspondiente.',
+    'paywall.error.trial': 'No se pudo iniciar la prueba gratuita.',
+    'paywall.error.purchase': 'No se pudo completar la compra.',
+    'paywall.error.restore': 'No se pudieron restaurar las compras.',
+    'paywall.trialUsed':
+      'La prueba gratuita ya se usó en este dispositivo. Elige un plan para continuar.',
+    'paywall.success.trial': '¡Prueba gratuita activada! Disfruta tu acceso.',
+    'paywall.success.purchase': 'Suscripción activa. ¡Gracias!',
+    'paywall.dismiss': 'Ahora no',
+
+    'manage.title': 'Gestionar suscripción',
+    'manage.status': 'ESTADO',
+    'manage.status.trial': 'Prueba gratuita',
+    'manage.status.active': 'Activa',
+    'manage.status.expired': 'Expirada',
+    'manage.status.none': 'Sin plan activo',
+    'manage.plan': 'PLAN',
+    'manage.plan.monthly': 'Mensual · $19.99 / mes',
+    'manage.plan.yearly': 'Anual · $199.99 / año',
+    'manage.plan.trial': 'Prueba gratuita (1 mes)',
+    'manage.plan.none': '—',
+    'manage.expires': 'RENOVACIÓN / EXPIRA',
+    'manage.expires.none': '—',
+    'manage.expires.in': 'En {n} días',
+    'manage.expires.past': 'Expirado',
+    'manage.cancel': 'Cancelar suscripción',
+    'manage.cancel.hint':
+      'Al cancelar aquí registramos tu intención — la cancelación real se hace en la tienda donde te suscribiste.',
+    'manage.canceled.badge': 'Cancelada',
+    'manage.canceled.body':
+      'Cancelaste el {date}. El acceso continúa hasta {expires}.',
+    'manage.restore': 'Restaurar compras',
+    'manage.legal':
+      'La suscripción se renueva automáticamente salvo cancelación desde la tienda correspondiente (App Store o Google Play).',
+    'manage.upgrade': 'Cambiar plan',
+    'manage.pill.expiresAt': 'Hasta {date}',
+
+    'profile.subscription.title': 'Gestionar suscripción',
+    'profile.subscription.body': 'Plan, renovación y cancelación.',
+
+    'home.subscription.gate.title': 'Se requiere suscripción',
+    'home.subscription.gate.body':
+      'Tu prueba gratuita finalizó. Elige un plan para seguir realizando AFE™ Safety Checks.',
+    'home.subscription.gate.cta': 'Ver planes',
+    'home.subscription.gate.trialCta': 'Iniciar prueba gratis de 1 mes',
+    'home.subscription.trial.pill': '{n} días restantes de prueba',
+    'home.subscription.active.pill': 'Plan activo',
 
     'new.eyebrow': 'NUEVO SAFETY CHECK',
     'new.title': 'Elige el modo',

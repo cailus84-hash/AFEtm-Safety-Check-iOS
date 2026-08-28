@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -100,6 +100,69 @@ class ProfileIn(BaseModel):
 class AcceptTermsIn(BaseModel):
     device_id: str
     version: Optional[str] = None  # defaults to server TERMS_VERSION
+
+
+# ---------- Subscription (Personal / Individual only) ----------
+# The mobile app monetizes through NATIVE store subscriptions
+# (Apple In-App Purchase / Google Play Billing). Stripe is intentionally
+# not used here. This backend keeps a lightweight *mirror* of what the
+# native store already owns; real receipt validation goes on the mobile
+# client via StoreKit / Google Play Billing and is forwarded here for
+# gating and history.
+#
+# Business rules (Aug 2026):
+#   • 1 month free trial when the athlete taps "Start free trial".
+#   • Monthly plan  → $19.99 / month
+#   • Yearly  plan  → $199.99 / year (marked as "Best value")
+#   • Individual / personal use only — no team seats.
+FREE_TRIAL_DAYS = 30
+PRODUCT_MONTHLY = "afetm_personal_monthly"
+PRODUCT_YEARLY = "afetm_personal_yearly"
+PRICE_MONTHLY_USD = 19.99
+PRICE_YEARLY_USD = 199.99
+
+
+class Subscription(BaseModel):
+    """Snapshot of the athlete's subscription status.
+
+    `status` values:
+      - "none"    → never started a trial, no subscription
+      - "trial"   → inside the 30-day free trial
+      - "active"  → paid, before `expires_at`
+      - "expired" → past `expires_at`; must resubscribe
+    `plan` values:
+      - "trial" | "monthly" | "yearly" | None
+    `platform` values:
+      - "apple" | "google" | "mock" | None
+    """
+    status: str = "none"
+    plan: Optional[str] = None
+    platform: Optional[str] = None
+    product_id: Optional[str] = None
+    started_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    canceled_at: Optional[str] = None
+    last_verified_at: Optional[str] = None
+
+
+class StartTrialIn(BaseModel):
+    device_id: str
+
+
+class PurchaseIn(BaseModel):
+    device_id: str
+    plan: str                       # "monthly" | "yearly"
+    platform: str                   # "apple" | "google" | "mock"
+    product_id: Optional[str] = None
+    receipt: Optional[str] = None   # Native receipt/token (opaque here)
+
+
+class RestoreIn(BaseModel):
+    device_id: str
+
+
+class CancelIn(BaseModel):
+    device_id: str
 
 
 class FCPv(BaseModel):
@@ -296,6 +359,151 @@ async def accept_terms(payload: AcceptTermsIn):
 async def get_profile(device_id: str = Query(...)):
     doc = await db.profiles.find_one({"device_id": device_id}, {"_id": 0})
     return doc
+
+
+# ------------------------- SUBSCRIPTION ROUTES -----------------------------
+#
+# These endpoints keep a mirror of the native store subscription so the
+# rest of the API (specifically assessment creation) can gate access.
+# Real StoreKit / Google Play receipt validation happens on the mobile
+# client — this backend simply trusts a validated receipt payload for
+# now and stores the resulting state.
+
+def _serialize_subscription(doc: Optional[dict]) -> Subscription:
+    if not doc or not doc.get("subscription"):
+        return Subscription()
+    sub = doc["subscription"] or {}
+    now = datetime.now(timezone.utc)
+    expires_at = sub.get("expires_at")
+    status = sub.get("status") or "none"
+    # Auto-expire based on wall clock so we never serve stale "active"
+    # rows if the natural expiry passed without a purchase renewal.
+    if expires_at and status in ("trial", "active"):
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if exp <= now:
+                status = "expired"
+        except Exception:
+            pass
+    return Subscription(
+        status=status,
+        plan=sub.get("plan"),
+        platform=sub.get("platform"),
+        product_id=sub.get("product_id"),
+        started_at=sub.get("started_at"),
+        expires_at=expires_at,
+        canceled_at=sub.get("canceled_at"),
+        last_verified_at=sub.get("last_verified_at"),
+    )
+
+
+async def _load_subscription(device_id: str) -> Subscription:
+    doc = await db.profiles.find_one({"device_id": device_id}, {"_id": 0})
+    return _serialize_subscription(doc)
+
+
+async def _write_subscription(device_id: str, sub: Subscription) -> Subscription:
+    await db.profiles.update_one(
+        {"device_id": device_id},
+        {"$set": {"subscription": sub.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return sub
+
+
+@api_router.get("/subscription", response_model=Subscription)
+async def get_subscription(device_id: str = Query(...)):
+    return await _load_subscription(device_id)
+
+
+@api_router.post("/subscription/start-trial", response_model=Subscription)
+async def start_trial(payload: StartTrialIn):
+    """Grant the 30-day free trial once per device.
+
+    Refuses to overwrite an already-active or already-consumed trial to
+    prevent the athlete from farming multiple trials by re-tapping.
+    """
+    current = await _load_subscription(payload.device_id)
+    if current.status in ("trial", "active"):
+        return current
+    if current.started_at:  # trial was already used previously
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TRIAL_ALREADY_USED",
+                "message": "The 30-day free trial has already been used on this device.",
+            },
+        )
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=FREE_TRIAL_DAYS)
+    sub = Subscription(
+        status="trial",
+        plan="trial",
+        platform=None,
+        product_id=None,
+        started_at=now.isoformat(),
+        expires_at=expires.isoformat(),
+        last_verified_at=now.isoformat(),
+    )
+    return await _write_subscription(payload.device_id, sub)
+
+
+@api_router.post("/subscription/purchase", response_model=Subscription)
+async def record_purchase(payload: PurchaseIn):
+    """Record a validated native purchase.
+
+    The mobile client is responsible for validating the receipt against
+    StoreKit or Google Play Billing before calling this endpoint. Right
+    now the backend simply trusts the payload and extends the
+    subscription by 30 / 365 days. TODO: server-to-server validation
+    with Apple/Google when we are ready to leave the placeholder phase.
+    """
+    if payload.plan not in ("monthly", "yearly"):
+        raise HTTPException(400, "plan must be 'monthly' or 'yearly'")
+    if payload.platform not in ("apple", "google", "mock"):
+        raise HTTPException(400, "platform must be apple | google | mock")
+    now = datetime.now(timezone.utc)
+    days = 30 if payload.plan == "monthly" else 365
+    product = payload.product_id or (
+        PRODUCT_MONTHLY if payload.plan == "monthly" else PRODUCT_YEARLY
+    )
+    sub = Subscription(
+        status="active",
+        plan=payload.plan,
+        platform=payload.platform,
+        product_id=product,
+        started_at=now.isoformat(),
+        expires_at=(now + timedelta(days=days)).isoformat(),
+        canceled_at=None,
+        last_verified_at=now.isoformat(),
+    )
+    return await _write_subscription(payload.device_id, sub)
+
+
+@api_router.post("/subscription/restore", response_model=Subscription)
+async def restore_subscription(payload: RestoreIn):
+    """Return the currently stored subscription for this device.
+
+    On real devices the client will first ask the native store for the
+    latest entitlements and forward them via /subscription/purchase; the
+    mock version simply echoes what we already have.
+    """
+    return await _load_subscription(payload.device_id)
+
+
+@api_router.post("/subscription/cancel", response_model=Subscription)
+async def cancel_subscription(payload: CancelIn):
+    """Mark subscription as canceled (still valid until `expires_at`).
+
+    The native stores are the source of truth for real cancellation —
+    this endpoint just records the intent so the UI can show it.
+    """
+    current = await _load_subscription(payload.device_id)
+    if current.status not in ("trial", "active"):
+        return current
+    now = datetime.now(timezone.utc).isoformat()
+    sub = current.model_copy(update={"canceled_at": now, "last_verified_at": now})
+    return await _write_subscription(payload.device_id, sub)
 
 
 async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[dict]]:
@@ -520,6 +728,23 @@ async def create_assessment(a: AssessmentIn):
     """
     # Personal-use enforcement: only the owner of the profile can create.
     profile = await _require_owned_profile(a.device_id)
+    # Subscription / free-trial gate. During the 30-day trial and while
+    # the paid subscription is active, the athlete keeps full access; if
+    # the subscription is expired or was never started, the mobile app
+    # must show the paywall (client also enforces this proactively).
+    sub = await _load_subscription(a.device_id)
+    if sub.status not in ("trial", "active"):
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "SUBSCRIPTION_REQUIRED",
+                "message": (
+                    "A free trial or an active subscription is required "
+                    "before creating an AFEtm assessment."
+                ),
+                "status": sub.status,
+            },
+        )
     # Extra safety: the age used to compute FCP must match the profile's age.
     # Mismatches are treated as an ownership violation (someone is trying to
     # submit for a different person).

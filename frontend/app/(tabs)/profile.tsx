@@ -137,6 +137,26 @@ export default function ProfileTab() {
             />
           </Pressable>
 
+          {/* Manage subscription (native store — App Store / Google Play) */}
+          <Pressable
+            testID="profile-subscription-btn"
+            style={[styles.editBtn, { marginTop: spacing.md, justifyContent: 'flex-start' }]}
+            onPress={() => router.push('/manage-subscription')}
+          >
+            <MaterialCommunityIcons name="crown-outline" size={18} color={colors.brandGold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.editBtnText, { color: colors.onSurface }]}>
+                {t('profile.subscription.title')}
+              </Text>
+              <Text style={styles.tourHint}>{t('profile.subscription.body')}</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={18}
+              color={colors.onSurfaceTertiary}
+            />
+          </Pressable>
+
           {/* Personal-Use License card */}
           <View style={styles.licenseCard} testID="profile-license-card">
             <View style={styles.licenseHead}>

@@ -1,13 +1,31 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useCallback } from 'react';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n } from '@/src/lib/i18n';
+import { getDeviceId } from '@/src/lib/api';
+import { fetchSubscription, hasActiveAccess } from '@/src/lib/billing';
 
 export default function NewChoice() {
   const router = useRouter();
   const { t } = useI18n();
+
+  // Subscription gate — always fresh when the tab gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const id = await getDeviceId();
+          const sub = await fetchSubscription(id);
+          if (!hasActiveAccess(sub)) {
+            router.replace('/paywall');
+          }
+        } catch {}
+      })();
+    }, [router])
+  );
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="new-choice-screen">

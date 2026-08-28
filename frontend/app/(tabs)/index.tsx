@@ -20,6 +20,12 @@ import {
   getDeviceId,
   listAssessments,
 } from '@/src/lib/api';
+import {
+  Subscription,
+  daysUntilExpiry,
+  fetchSubscription,
+  hasActiveAccess,
+} from '@/src/lib/billing';
 import { TrendSparkline } from '@/src/components/TrendSparkline';
 import { ColorGuideCard } from '@/src/components/ColorGuideCard';
 import {
@@ -46,6 +52,7 @@ export default function Home() {
   // License reminder — shown on the 1st of every month, once per month.
   // Dismissal is per YYYY-MM so the reminder returns next month.
   const [showLicenseReminder, setShowLicenseReminder] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +91,17 @@ export default function Home() {
           return;
         }
       } catch {}
+
+      // Subscription state — controls whether the athlete can start new
+      // Safety Checks. Never bounces to the paywall automatically; we
+      // only surface the gate banner in the UI so browsing history and
+      // reading past assessments stays available.
+      try {
+        const s = await fetchSubscription(id);
+        setSubscription(s);
+      } catch {
+        setSubscription(null);
+      }
 
       // License reminder — visible on the 1st of every month unless the
       // athlete already dismissed it for this month.
@@ -230,6 +248,66 @@ export default function Home() {
           </View>
         ) : (
           <>
+            {/* Subscription pill (trial countdown or active plan) */}
+            {subscription && hasActiveAccess(subscription) && (
+              <Pressable
+                testID="home-subscription-pill"
+                onPress={() => router.push('/manage-subscription')}
+                style={styles.subPill}
+              >
+                <MaterialCommunityIcons
+                  name={subscription.status === 'trial' ? 'gift-outline' : 'crown-outline'}
+                  size={13}
+                  color={subscription.status === 'trial' ? colors.zoneYellow : colors.brandGold}
+                />
+                <Text
+                  style={[
+                    styles.subPillText,
+                    { color: subscription.status === 'trial' ? colors.zoneYellow : colors.brandGold },
+                  ]}
+                >
+                  {subscription.status === 'trial'
+                    ? t('home.subscription.trial.pill', { n: daysUntilExpiry(subscription) })
+                    : t('home.subscription.active.pill')}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={14} color={colors.onSurfaceTertiary} />
+              </Pressable>
+            )}
+
+            {/* Subscription gate banner — visible when no active access */}
+            {subscription && !hasActiveAccess(subscription) && (
+              <View style={styles.gateCard} testID="home-subscription-gate">
+                <View style={styles.gateHeader}>
+                  <View style={styles.gateIcon}>
+                    <MaterialCommunityIcons name="lock-outline" size={16} color={colors.brandGold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.gateTitle}>{t('home.subscription.gate.title')}</Text>
+                    <Text style={styles.gateBody}>{t('home.subscription.gate.body')}</Text>
+                  </View>
+                </View>
+                <Pressable
+                  testID="home-subscription-gate-cta"
+                  onPress={() => router.push('/paywall')}
+                  style={({ pressed }) => [
+                    styles.gateCta,
+                    pressed && { opacity: 0.9 },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={subscription.status === 'none' ? 'gift-outline' : 'crown-outline'}
+                    size={14}
+                    color="#000"
+                  />
+                  <Text style={styles.gateCtaText}>
+                    {subscription.status === 'none'
+                      ? t('home.subscription.gate.trialCta')
+                      : t('home.subscription.gate.cta')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
             {last ? (
               last.zone ? (
                 <Pressable
@@ -382,7 +460,15 @@ export default function Home() {
         <Pressable
           testID="home-cta-new"
           style={({ pressed }) => [shared.primaryBtn, styles.fab, pressed && { opacity: 0.9 }]}
-          onPress={() => router.push('/(tabs)/new')}
+          onPress={() => {
+            // If the athlete doesn't have access, send them to the paywall
+            // instead of the assessment flow. Backend also enforces this.
+            if (subscription && !hasActiveAccess(subscription)) {
+              router.push('/paywall');
+              return;
+            }
+            router.push('/(tabs)/new');
+          }}
         >
           <MaterialCommunityIcons name="heart-pulse" size={18} color="#000" />
           <Text style={[shared.primaryBtnText, { marginLeft: spacing.sm }]}>
@@ -611,4 +697,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  subPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md, paddingVertical: 5,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: '#141310',
+    marginBottom: spacing.md,
+  },
+  subPillText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  gateCard: {
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    shadowColor: colors.brandGold, shadowOpacity: 0.3, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 }, elevation: 4,
+  },
+  gateHeader: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  gateIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 2,
+  },
+  gateTitle: { color: colors.brandGold, fontSize: 13, fontWeight: '800', marginBottom: 4 },
+  gateBody: { color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 16 },
+  gateCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandGold,
+  },
+  gateCtaText: { color: '#000', fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
 });

@@ -87,7 +87,7 @@ export class UpstreamError extends Error {
   }
 }
 
-async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     ...opts,
