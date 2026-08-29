@@ -449,6 +449,15 @@ function ScanPhase({ hr, onSelect, t }: {
           </Pressable>
         ))}
       </View>
+
+      {/* Bluetooth compatibility disclaimer — user's responsibility */}
+      <View style={styles.bleDisclaimer} testID="guided-ble-disclaimer">
+        <MaterialCommunityIcons name="bluetooth-audio" size={14} color={colors.brandGold} />
+        <Text style={styles.bleDisclaimerText}>
+          <Text style={{ fontWeight: '800' }}>{t('new.ble.disclaimer.title')} · </Text>
+          {t('new.ble.disclaimer.body')}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -670,4 +679,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F1A0A',
   },
   reconnectText: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 16, flex: 1 },
+  bleDisclaimer: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    marginTop: spacing.md, padding: spacing.md,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: '#141310',
+  },
+  bleDisclaimerText: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 16 },
 });

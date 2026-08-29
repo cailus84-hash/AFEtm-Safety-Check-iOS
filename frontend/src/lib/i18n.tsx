@@ -74,6 +74,14 @@ const dict = {
     'terms.notAllowed.3': 'Perform evaluations on behalf of another person.',
     'terms.notAllowed.4': 'Use this app as a coach, trainer, clinician, researcher, teacher or institution.',
     'terms.notAllowed.5': 'Share a single personal account for institutional or team use.',
+    // Bluetooth / hardware compatibility disclaimer (user's responsibility)
+    'terms.sectionHardware': 'BLUETOOTH / HARDWARE COMPATIBILITY',
+    'terms.hardware.1':
+      'Compatibility, pairing, availability and correct operation of any Bluetooth Low Energy heart-rate monitor or third-party device depend on the manufacturer, the operating system and the mobile device — not on AFEtm.',
+    'terms.hardware.2':
+      'WeWon Smart Sport Solutions LLC is not responsible for the performance, connection quality, battery life, firmware or malfunction of Bluetooth accessories used with the app.',
+    'terms.hardware.3':
+      'If a Bluetooth device fails to connect or deliver readings, the athlete can always switch to Manual mode to continue the AFE™ Safety Check.',
     'terms.checkbox.self':
       'I confirm that I will use AFEtm Mobile only for myself.',
     'terms.checkbox.institutional':
@@ -274,6 +282,9 @@ const dict = {
       'Manually enter RHR and the recovery-window readings. Useful if you do not have a compatible monitor.',
     'new.web.warning':
       'Guided mode requires native Bluetooth Low Energy and does not work in the web preview or in Expo Go. Generate an iOS/Android build to try it.',
+    'new.ble.disclaimer.title': 'Bluetooth compatibility',
+    'new.ble.disclaimer.body':
+      'Compatibility, pairing and reading quality of any BLE heart-rate monitor depend on the manufacturer and your device — not on AFEtm. WeWon Smart Sport Solutions LLC is not responsible for third-party Bluetooth hardware.',
 
     // History
     'history.eyebrow': 'RECORD',
@@ -648,6 +659,13 @@ const dict = {
     'terms.notAllowed.3': 'Realizar evaluaciones por cuenta de otra persona.',
     'terms.notAllowed.4': 'Usar esta app como entrenador, clínico, investigador, docente o institución.',
     'terms.notAllowed.5': 'Compartir una sola cuenta personal para uso institucional o de equipo.',
+    'terms.sectionHardware': 'COMPATIBILIDAD BLUETOOTH / HARDWARE',
+    'terms.hardware.1':
+      'La compatibilidad, el emparejamiento, la disponibilidad y el correcto funcionamiento de cualquier pulsómetro Bluetooth Low Energy o dispositivo de terceros dependen del fabricante, el sistema operativo y el dispositivo móvil — no de AFEtm.',
+    'terms.hardware.2':
+      'WeWon Smart Sport Solutions LLC no es responsable del desempeño, la calidad de conexión, la batería, el firmware ni el mal funcionamiento de accesorios Bluetooth usados con la app.',
+    'terms.hardware.3':
+      'Si un dispositivo Bluetooth falla al conectarse o al entregar lecturas, el atleta siempre puede continuar en modo Manual para completar el AFE™ Safety Check.',
     'terms.checkbox.self':
       'Confirmo que usaré AFEtm Mobile solo para mí.',
     'terms.checkbox.institutional':
@@ -836,6 +854,9 @@ const dict = {
       'Ingresa manualmente FCr y las lecturas de la ventana de recuperación. Útil si no tienes un pulsómetro compatible.',
     'new.web.warning':
       'El modo Guiado requiere Bluetooth Low Energy nativo y no funciona en la vista previa web ni en Expo Go. Genera un build de iOS/Android para probarlo.',
+    'new.ble.disclaimer.title': 'Compatibilidad Bluetooth',
+    'new.ble.disclaimer.body':
+      'La compatibilidad, el emparejamiento y la calidad de lectura de cualquier pulsómetro BLE dependen del fabricante y de tu dispositivo — no de AFEtm. WeWon Smart Sport Solutions LLC no es responsable del hardware Bluetooth de terceros.',
 
     'history.eyebrow': 'REGISTRO',
     'history.title': 'Historial',

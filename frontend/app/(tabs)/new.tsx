@@ -60,6 +60,25 @@ export default function NewChoice() {
           </View>
         </Pressable>
 
+        {/* Bluetooth compatibility notice — user's responsibility */}
+        <View style={styles.bleDisclaimer} testID="new-ble-disclaimer">
+          <View style={styles.bleDisclaimerIcon}>
+            <MaterialCommunityIcons
+              name="bluetooth-audio"
+              size={16}
+              color={colors.brandGold}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bleDisclaimerTitle}>
+              {t('new.ble.disclaimer.title')}
+            </Text>
+            <Text style={styles.bleDisclaimerBody}>
+              {t('new.ble.disclaimer.body')}
+            </Text>
+          </View>
+        </View>
+
         <Pressable
           testID="mode-manual"
           onPress={() => router.push('/assessment-flow/manual')}
@@ -140,4 +159,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F1A0A',
   },
   warnText: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 17, flex: 1 },
+  bleDisclaimer: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: '#141310',
+  },
+  bleDisclaimerIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 2,
+  },
+  bleDisclaimerTitle: {
+    color: colors.brandGold, fontSize: 12, fontWeight: '800',
+    letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase',
+  },
+  bleDisclaimerBody: {
+    color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 16,
+  },
 });

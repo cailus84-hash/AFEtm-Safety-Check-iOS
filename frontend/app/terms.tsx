@@ -206,6 +206,16 @@ export default function Terms() {
               <Bullet color={colors.zoneRed} icon="close-circle" text={t('terms.notAllowed.5')} />
             </View>
 
+            {/* Hardware / Bluetooth compatibility (user's responsibility) */}
+            <Text style={[styles.section, { color: colors.brandGold, marginTop: spacing.lg }]}>
+              {t('terms.sectionHardware')}
+            </Text>
+            <View style={styles.list} testID="terms-hardware-block">
+              <Bullet color={colors.brandGold} icon="bluetooth" text={t('terms.hardware.1')} />
+              <Bullet color={colors.brandGold} icon="shield-off-outline" text={t('terms.hardware.2')} />
+              <Bullet color={colors.zoneGreen} icon="pencil-outline" text={t('terms.hardware.3')} />
+            </View>
+
             <View style={styles.divider} />
 
             <Checkbox testID="terms-chk-self" checked={c1} onToggle={() => setC1((v) => !v)} label={t('terms.checkbox.self')} />
