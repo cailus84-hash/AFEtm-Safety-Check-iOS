@@ -29,6 +29,7 @@ export type Profile = {
   weight: number;
   sport: string;
   target_zone?: 'BLUE' | 'GREEN' | null;
+  athlete_id?: number | null;    // Official AFEtm numeric athleteId
   terms_accepted_at?: string | null;
   terms_version?: string | null;
   updated_at?: string;
@@ -41,6 +42,23 @@ export type FCPv = {
   recent_illness: number;
   subjective_load: number;
 };
+
+/**
+ * Official AFEtm contextual interview factor keys.
+ * The mobile UI exposes these as multi-select toggles; "none" is exclusive.
+ */
+export const CONTEXT_FACTORS = [
+  'illness',
+  'sleep',
+  'training',
+  'dehydration',
+  'medication',
+  'pain',
+  'stimulants',
+  'none',
+] as const;
+export type ContextFactor = (typeof CONTEXT_FACTORS)[number];
+export const CONTEXT_NOTES_MAX = 2000;
 
 export type Assessment = {
   id: string;
@@ -60,6 +78,9 @@ export type Assessment = {
   fcpv: FCPv;
   fcpv_total: number;
   context_flag: boolean;
+  factors?: ContextFactor[];
+  notes?: string | null;
+  context_interview_id?: string | null;
   created_at: string;
   calc_source?: 'authoritative' | 'pending';
   calc_notice?: string | null;
@@ -154,7 +175,9 @@ export async function createAssessment(payload: {
   fcr: number;
   age: number;
   readings: Record<string, number>;
-  fcpv: FCPv;
+  fcpv?: FCPv;
+  factors: ContextFactor[];
+  notes?: string | null;
 }) {
   return req<Assessment>('/assessments', { method: 'POST', body: JSON.stringify(payload) });
 }

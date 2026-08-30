@@ -9,13 +9,22 @@ import {
   Platform,
   Animated,
   Easing,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
-import { createAssessment, fetchProfile, getDeviceId, UpstreamError } from '@/src/lib/api';
+import {
+  createAssessment,
+  fetchProfile,
+  getDeviceId,
+  UpstreamError,
+  CONTEXT_FACTORS,
+  CONTEXT_NOTES_MAX,
+  type ContextFactor,
+} from '@/src/lib/api';
 import { useI18n } from '@/src/lib/i18n';
 
 // Capture windows (seconds elapsed since t=0 of recovery)
@@ -24,6 +33,18 @@ import { useI18n } from '@/src/lib/i18n';
 const CAPTURE_TIMES = [60, 90, 120, 150, 180] as const;
 const RECOVERY_DURATION = 180; // s
 
+// Icon map for the AFEtm contextual factor toggle buttons.
+const FACTOR_ICONS: Record<ContextFactor, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  illness: 'virus-outline',
+  sleep: 'sleep',
+  training: 'run-fast',
+  dehydration: 'cup-water',
+  medication: 'pill',
+  pain: 'emoticon-sick-outline',
+  stimulants: 'coffee-outline',
+  none: 'checkbox-marked-circle-outline',
+};
+
 type Phase =
   | 'scan'
   | 'connect'
@@ -31,6 +52,7 @@ type Phase =
   | 'fcr'
   | 'fcp'
   | 'recovery'
+  | 'factors'
   | 'submit'
   | 'error';
 
@@ -39,12 +61,14 @@ export default function Guided() {
   const { t } = useI18n();
   const hr = useHeartRateMonitor();
   const [phase, setPhase] = useState<Phase>('scan');
-  const [profile, setProfile] = useState<{ age: number } | null>(null);
+  const [profile, setProfile] = useState<{ age: number; athleteId: number | null } | null>(null);
   const [deviceId, setDeviceId] = useState('');
   const [fcr, setFcr] = useState<number | null>(null);
   const [hrPeak, setHrPeak] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [captured, setCaptured] = useState<Record<string, number>>({});
+  const [factors, setFactors] = useState<ContextFactor[]>([]);
+  const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const pulse = useRef(new Animated.Value(0)).current;
@@ -56,6 +80,14 @@ export default function Guided() {
   useEffect(() => { capturedRef.current = captured; }, [captured]);
   useEffect(() => { hrPeakRef.current = hrPeak; }, [hrPeak]);
 
+  const toggleFactor = (f: ContextFactor) => {
+    setFactors((prev) => {
+      if (f === 'none') return prev.includes('none') ? [] : ['none'];
+      const next = prev.filter((x) => x !== 'none');
+      return next.includes(f) ? next.filter((x) => x !== f) : [...next, f];
+    });
+  };
+
   // Load profile once
   useEffect(() => {
     (async () => {
@@ -66,7 +98,7 @@ export default function Guided() {
         router.replace('/profile-setup');
         return;
       }
-      setProfile({ age: p.age });
+      setProfile({ age: p.age, athleteId: p.athlete_id ?? null });
     })();
   }, [router]);
 
@@ -153,7 +185,9 @@ export default function Guided() {
       if (s >= RECOVERY_DURATION) {
         clearInterval(timerRef.current);
         timerRef.current = null;
-        setPhase('submit');
+        // NEW: gate on the AFEtm contextual interview BEFORE submitting
+        // to Replit. Never auto-submit without factors.
+        setPhase('factors');
       }
     }, 500);
     return () => {
@@ -167,10 +201,16 @@ export default function Guided() {
     if (phase !== 'submit') return;
     (async () => {
       try {
+        // Guard: profile MUST have a numeric athleteId before hitting Replit.
+        if (!profile?.athleteId || profile.athleteId <= 0) {
+          setErrorMsg(t('assess.error.athleteId'));
+          setPhase('error');
+          return;
+        }
         // Ensure all captures present (safety fallback: use current hr)
         const readings: Record<string, number> = { '0': hrPeak ?? 0 };
-        for (const t of CAPTURE_TIMES) {
-          const key = String(t);
+        for (const tk of CAPTURE_TIMES) {
+          const key = String(tk);
           readings[key] = captured[key] ?? hr.hr ?? 0;
         }
         const res = await createAssessment({
@@ -178,7 +218,8 @@ export default function Guided() {
           fcr: fcr ?? 0,
           age: profile?.age ?? 0,
           readings,
-          fcpv: { sleep: 0, hydration: 0, symptoms: 0, recent_illness: 0, subjective_load: 0 },
+          factors,
+          notes: notes.trim() || null,
         });
         // Cleanly disconnect before navigating
         await hr.disconnect().catch(() => {});
@@ -191,6 +232,8 @@ export default function Guided() {
               body: e.upstream_body?.slice(0, 200) || e.message,
             })
           );
+        } else if (typeof e?.message === 'string' && e.message.includes('ATHLETE_ID_MISSING')) {
+          setErrorMsg(t('assess.error.athleteId'));
         } else {
           setErrorMsg(e?.message || t('assess.error.generic'));
         }
@@ -287,6 +330,95 @@ export default function Guided() {
             <RecoveryPhase elapsed={elapsed} captured={captured} hrPeak={hrPeak} fcr={fcr!} t={t} />
           </>
         )}
+        {phase === 'factors' && (
+          <View style={[shared.card, { marginTop: spacing.xl }]} testID="guided-factors-phase">
+            <Text style={shared.h3}>{t('assess.context.title')}</Text>
+            <Text style={[shared.body, { marginTop: spacing.sm }]}>
+              {t('assess.context.body')}
+            </Text>
+
+            {(!profile?.athleteId || profile.athleteId <= 0) && (
+              <View style={styles.athleteWarn} testID="guided-athlete-warn">
+                <MaterialCommunityIcons
+                  name="alert-circle-outline"
+                  size={16}
+                  color={colors.zoneRed}
+                />
+                <Text style={styles.athleteWarnText}>
+                  {t('assess.error.athleteId')}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.factorsGrid}>
+              {CONTEXT_FACTORS.map((f) => {
+                const active = factors.includes(f);
+                return (
+                  <Pressable
+                    key={f}
+                    testID={`guided-factor-${f}`}
+                    onPress={() => toggleFactor(f)}
+                    style={[
+                      styles.factorChip,
+                      active && styles.factorChipActive,
+                      f === 'none' && styles.factorChipNone,
+                      f === 'none' && active && styles.factorChipNoneActive,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={FACTOR_ICONS[f]}
+                      size={18}
+                      color={active ? '#000' : colors.brandGold}
+                    />
+                    <Text
+                      style={[
+                        styles.factorChipText,
+                        active && { color: '#000' },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {t(`assess.factor.${f}` as any)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[shared.muted, { marginTop: spacing.sm }]}>
+              {t('assess.context.none.hint')}
+            </Text>
+
+            <Text style={[shared.label, { marginTop: spacing.xl }]}>
+              {t('assess.context.notes')}
+            </Text>
+            <TextInput
+              testID="guided-factors-notes"
+              value={notes}
+              onChangeText={(txt) => setNotes(txt.slice(0, CONTEXT_NOTES_MAX))}
+              placeholder={t('assess.context.notes.ph')}
+              placeholderTextColor={colors.onSurfaceTertiary}
+              style={styles.notesInput}
+              multiline
+              maxLength={CONTEXT_NOTES_MAX}
+            />
+            <Text style={styles.notesCount}>
+              {t('assess.context.notes.count', { n: notes.length })}
+            </Text>
+
+            <Pressable
+              testID="guided-factors-submit"
+              disabled={!factors.length || !(profile?.athleteId && profile.athleteId > 0)}
+              onPress={() => setPhase('submit')}
+              style={({ pressed }) => [
+                shared.primaryBtn,
+                { marginTop: spacing.lg },
+                (!factors.length || !(profile?.athleteId && profile.athleteId > 0)) && { opacity: 0.4 },
+                pressed && { opacity: 0.9 },
+              ]}
+            >
+              <Text style={shared.primaryBtnText}>{t('assess.submit')}</Text>
+            </Pressable>
+          </View>
+        )}
         {phase === 'submit' && (
           <View style={[shared.card, { alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }]}>
             <ActivityIndicator color={colors.brandGold} size="large" />
@@ -342,6 +474,8 @@ function phaseLabel(p: Phase, t: (k: any) => string) {
       return t('guided.phase.fcp');
     case 'recovery':
       return t('guided.phase.recovery');
+    case 'factors':
+      return t('assess.context.title');
     case 'submit':
       return t('guided.phase.submit');
     case 'error':
@@ -686,4 +820,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#141310',
   },
   bleDisclaimerText: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 11, lineHeight: 16 },
+  athleteWarn: {
+    flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+    padding: spacing.md, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.zoneRed,
+    backgroundColor: 'rgba(220,53,69,0.08)',
+    marginTop: spacing.md,
+  },
+  athleteWarnText: { flex: 1, color: colors.zoneRed, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  factorsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  factorChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceSecondary,
+    minWidth: '48%',
+    flexGrow: 1,
+  },
+  factorChipActive: {
+    backgroundColor: colors.brandGold,
+    borderColor: colors.brandGold,
+  },
+  factorChipNone: {
+    borderColor: colors.zoneGreen,
+    borderStyle: 'dashed',
+  },
+  factorChipNoneActive: {
+    backgroundColor: colors.zoneGreen,
+    borderColor: colors.zoneGreen,
+    borderStyle: 'solid',
+  },
+  factorChipText: {
+    flex: 1,
+    color: colors.onSurface, fontSize: 12, fontWeight: '700',
+  },
+  notesInput: {
+    minHeight: 96,
+    padding: spacing.md,
+    marginTop: 6,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    color: colors.onSurface, fontSize: 13, lineHeight: 18,
+    textAlignVertical: 'top',
+  },
+  notesCount: {
+    color: colors.onSurfaceTertiary, fontSize: 11,
+    textAlign: 'right', marginTop: 4,
+  },
 });

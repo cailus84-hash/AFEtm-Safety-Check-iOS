@@ -83,6 +83,7 @@ class Profile(BaseModel):
     weight: float
     sport: str
     target_zone: Optional[str] = None  # None | "BLUE" | "GREEN"
+    athlete_id: Optional[int] = None   # Official AFEtm numeric athleteId (Replit)
     terms_accepted_at: Optional[str] = None
     terms_version: Optional[str] = None
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -95,6 +96,7 @@ class ProfileIn(BaseModel):
     weight: float
     sport: str
     target_zone: Optional[str] = None
+    athlete_id: Optional[int] = None
 
 
 class AcceptTermsIn(BaseModel):
@@ -173,12 +175,31 @@ class FCPv(BaseModel):
     subjective_load: int = 0  # 0-2
 
 
+# Official AFEtm contextual interview factor keys (Replit /api/context-interviews).
+# The mobile UI presents these as multi-select toggles. "none" is exclusive.
+CONTEXT_FACTOR_KEYS = {
+    "illness",       # recent or current illness
+    "sleep",         # poor sleep
+    "training",      # elevated recent training load
+    "dehydration",   # poor hydration
+    "medication",    # medication use
+    "pain",          # pain or discomfort
+    "stimulants",    # energy drinks, caffeine, psychoactive stimulants
+    "none",          # no relevant contextual factors (exclusive)
+}
+NOTES_MAX = 2000
+
+
 class AssessmentIn(BaseModel):
     device_id: str
     fcr: int                              # Resting HR
     age: int
     readings: Dict[str, int]              # { "0","30","60","90","120","180" -> bpm }
     fcpv: FCPv = Field(default_factory=FCPv)
+    # Official AFEtm contextual interview payload (sent to Replit
+    # /api/context-interviews before /api/assessments).
+    factors: List[str] = Field(default_factory=list)
+    notes: Optional[str] = None
 
 
 class Assessment(BaseModel):
@@ -202,6 +223,9 @@ class Assessment(BaseModel):
     created_at: str
     calc_source: str = "pending"       # "authoritative" | "pending"
     calc_notice: Optional[str] = None  # explanation shown to the user
+    factors: List[str] = Field(default_factory=list)
+    notes: Optional[str] = None
+    context_interview_id: Optional[str] = None  # id returned by Replit on success
 
 
 # ---------- Documented math only (NO classification) ----------
@@ -506,6 +530,66 @@ async def cancel_subscription(payload: CancelIn):
     return await _write_subscription(payload.device_id, sub)
 
 
+def _num(v):
+    """Best-effort numeric coercion (Replit returns some values as strings)."""
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _call_upstream_context_interview(
+    athlete_id: int, athlete_name: str, factors: List[str], notes: Optional[str]
+) -> tuple[Optional[dict], Optional[dict]]:
+    """Log the AFEtm Contextual Interview with the authoritative Replit engine.
+
+    This MUST run successfully before ``/api/assessments`` — Replit
+    returns HTTP 428 ``contextInterviewRequired`` if we skip it.
+
+    Returns ``(data, error)`` where exactly one is populated. Same
+    envelope convention as ``_call_upstream``: an all-None tuple means
+    "network-level failure" which the caller can treat as pending.
+    """
+    if not AUTHORITATIVE_UPSTREAM_URL or not AUTHORITATIVE_UPSTREAM_TOKEN:
+        return None, None
+    url = f"{AUTHORITATIVE_UPSTREAM_URL}/api/context-interviews"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {AUTHORITATIVE_UPSTREAM_TOKEN}",
+    }
+    # Payload matches the official Replit schema EXACTLY:
+    #   { athleteId: number, athleteName: string, factors: string[], notes?: string }
+    payload = {
+        "athleteId": int(athlete_id),           # NEVER a string
+        "athleteName": str(athlete_name or ""),
+        "factors": list(factors),
+    }
+    if notes:
+        payload["notes"] = str(notes)[:NOTES_MAX]
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.post(url, headers=headers, json=payload)
+    except Exception as e:
+        logging.warning("Upstream context-interview network failure: %s", e)
+        return None, None
+    if r.status_code not in (200, 201):
+        body = r.text[:2000]
+        logging.warning(
+            "Upstream context-interview %s: %s", r.status_code, body[:200]
+        )
+        return None, {
+            "upstream_url": url,
+            "upstream_status": r.status_code,
+            "upstream_body": body,
+        }
+    try:
+        return r.json(), None
+    except Exception:
+        return {}, None
+
+
 async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[dict]]:
     """Delegate calculation to the authoritative upstream server.
 
@@ -561,7 +645,7 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         logging.warning("Upstream network failure: %s", e)
         # Network-level failure — treat as pending (temporary).
         return None, None
-    if r.status_code != 200:
+    if r.status_code not in (200, 201):
         body = r.text[:2000]
         logging.warning("Upstream %s: %s", r.status_code, body[:200])
         return None, {
@@ -577,6 +661,15 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
             "upstream_status": r.status_code,
             "upstream_body": r.text[:2000],
         }
+    # Field mapping: Replit's authoritative response schema uses camelCase
+    # and slightly different field names. Emergent never invents these —
+    # every value below is taken as-is from Replit and only re-keyed to
+    # the schema the mobile app expects. If a required field is truly
+    # absent, the call is rejected (no local fallback).
+    zone_raw = data.get("zone") or data.get("colorZone")
+    zone_norm = str(zone_raw).strip().upper() if zone_raw else None
+    pattern_raw = data.get("pattern") or data.get("recoveryPattern")
+    pattern_norm = str(pattern_raw).strip().upper() if pattern_raw else None
     derived = {
         # Authoritative TARGET HR (a.k.a. FCP / HRP / targetHr) — must
         # come from Replit's calculation. Accept the canonical alternate
@@ -586,20 +679,36 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
             or data.get("targetHr")
             or data.get("HRP")
             or data.get("fcp")
+            or data.get("hr90Target")
+            or data.get("hrTargetKarvonen")
         ),
-        "hr_peak": data.get("hr_peak") or a.readings.get("0"),
-        "hrr": data.get("hrr"),
-        "recpct": data.get("recpct"),
-        "aurc": data.get("aurc"),
-        "tau": data.get("tau"),
-        "pattern": data.get("pattern"),
-        "zone": data.get("zone"),
+        "hr_peak": data.get("hr_peak") or data.get("maxHr") or a.readings.get("0"),
+        # HRR at 3 min is the canonical AFEtm HRR reported to the athlete.
+        "hrr": (
+            data.get("hrr")
+            or data.get("hrr180")
+            or data.get("hrr90")
+        ),
+        # RECpct at 3 min is the canonical AFEtm recovery-percent value.
+        "recpct": _num(
+            data.get("recpct")
+            or data.get("recPct180")
+            or data.get("recPercent180")
+        ),
+        "aurc": _num(data.get("aurc")),
+        "tau": _num(data.get("tau")),
+        "pattern": pattern_norm,
+        "zone": zone_norm,
         "action": data.get("action") or "",
         "fcpv_total": data.get("fcpv_total")
             or int(sum(a.fcpv.model_dump().values())),
         "context_flag": data.get("context_flag", False),
     }
-    for k in ("fcp_target", "hrr", "recpct", "pattern", "zone"):
+    # Required authoritative fields. `fcp_target` is intentionally NOT
+    # required here — it is a well-known age-derived value (Karvonen 80%)
+    # that our local `calc_math_only` already computes, so we accept
+    # Replit's authoritative classification even if this field is null.
+    for k in ("hrr", "recpct", "pattern", "zone"):
         if derived.get(k) in (None, ""):
             return None, {
                 "upstream_url": url,
@@ -759,36 +868,132 @@ async def create_assessment(a: AssessmentIn):
                 ),
             },
         )
+
+    # ------------------------------------------------------------------
+    # AFEtm Contextual Interview validation (Replit /api/context-interviews)
+    # ------------------------------------------------------------------
+    # 1. The athlete MUST have a numeric AFEtm athleteId in their profile.
+    #    Never invent one; never send a string. If missing, stop the
+    #    request and report the problem to the mobile client.
+    raw_aid = profile.get("athlete_id")
+    try:
+        athlete_id_num = int(raw_aid) if raw_aid is not None else None
+    except (TypeError, ValueError):
+        athlete_id_num = None
+    if not athlete_id_num or athlete_id_num <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ATHLETE_ID_MISSING",
+                "message": (
+                    "This account has no AFEtm athleteId. Please provide "
+                    "your official AFEtm athleteId in your profile before "
+                    "running an assessment. AFEtm never invents identifiers."
+                ),
+            },
+        )
+
+    # 2. factors validation: at least one official key; "none" is exclusive.
+    submitted = [str(f).strip() for f in (a.factors or []) if str(f).strip()]
+    unknown = [f for f in submitted if f not in CONTEXT_FACTOR_KEYS]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CONTEXT_FACTORS_INVALID",
+                "message": f"Unknown contextual factor(s): {unknown}",
+                "allowed": sorted(list(CONTEXT_FACTOR_KEYS)),
+            },
+        )
+    if not submitted:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CONTEXT_FACTORS_REQUIRED",
+                "message": (
+                    "At least one AFEtm contextual factor is required. "
+                    "Use 'none' if no relevant factor applies."
+                ),
+                "allowed": sorted(list(CONTEXT_FACTOR_KEYS)),
+            },
+        )
+    # "none" is exclusive — collapse to just ["none"] when present.
+    if "none" in submitted:
+        submitted = ["none"]
+    else:
+        # Deduplicate preserving order.
+        seen = set()
+        deduped = []
+        for f in submitted:
+            if f not in seen:
+                seen.add(f)
+                deduped.append(f)
+        submitted = deduped
+
+    # notes: optional, hard-clamp to 2000 chars server-side too.
+    notes_clean: Optional[str] = None
+    if a.notes:
+        notes_clean = str(a.notes).strip()[:NOTES_MAX] or None
+
     math = calc_math_only(a.fcr, a.age, a.readings, a.fcpv.model_dump())
     upstream_configured = bool(AUTHORITATIVE_UPSTREAM_URL and AUTHORITATIVE_UPSTREAM_TOKEN)
+    context_interview_id: Optional[str] = None
     if upstream_configured:
-        derived, error = await _call_upstream(a)
-        if error is not None:
-            # Surface the EXACT authoritative failure — do NOT fall back.
-            # Uses 424 Failed Dependency (semantically correct + not
-            # rewritten by Cloudflare/K8s ingress the way 502 is).
+        # STEP 1/2 — Log the contextual interview with Replit BEFORE the
+        # assessment call. Any non-2xx status is surfaced as-is; we never
+        # continue silently past a context-interview failure.
+        ci_data, ci_error = await _call_upstream_context_interview(
+            athlete_id_num, profile.get("name") or "", submitted, notes_clean
+        )
+        if ci_error is not None:
             raise HTTPException(
                 status_code=424,
                 detail={
                     "code": "AUTHORITATIVE_UPSTREAM_ERROR",
+                    "stage": "context-interview",
                     "message": (
-                        "El servidor autoritativo AFEtm rechazó la solicitud. "
-                        "La evaluación NO se guardó para no ocultar el error."
+                        "The authoritative AFEtm server rejected the "
+                        "contextual interview. The assessment WAS NOT saved."
                     ),
-                    **error,
+                    **ci_error,
                 },
             )
-        if derived is None:
-            # Network-level failure while configured — treat as pending so the
-            # user does not lose the measurements captured in the field.
+        if ci_data is None:
+            # Network-level failure while configured — treat as pending.
             derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
             calc_source = "pending"
-            calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo)"
+            calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo — entrevista contextual)"
         else:
-            derived = {**math, **{k: v for k, v in derived.items() if v is not None}}
-            derived.setdefault("context_flag", False)
-            calc_source = "authoritative"
-            calc_notice = None
+            _cid_raw = (
+                ci_data.get("id")
+                or ci_data.get("interviewId")
+                or ci_data.get("contextInterviewId")
+            )
+            context_interview_id = str(_cid_raw) if _cid_raw is not None else None
+            # STEP 2/2 — Now the actual assessment call.
+            derived, error = await _call_upstream(a)
+            if error is not None:
+                raise HTTPException(
+                    status_code=424,
+                    detail={
+                        "code": "AUTHORITATIVE_UPSTREAM_ERROR",
+                        "stage": "assessment",
+                        "message": (
+                            "El servidor autoritativo AFEtm rechazó la solicitud. "
+                            "La evaluación NO se guardó para no ocultar el error."
+                        ),
+                        **error,
+                    },
+                )
+            if derived is None:
+                derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
+                calc_source = "pending"
+                calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo)"
+            else:
+                derived = {**math, **{k: v for k, v in derived.items() if v is not None}}
+                derived.setdefault("context_flag", False)
+                calc_source = "authoritative"
+                calc_notice = None
     else:
         # Upstream not configured → pending (documented behavior).
         derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
@@ -803,6 +1008,9 @@ async def create_assessment(a: AssessmentIn):
         "age": a.age,
         "readings": a.readings,
         "fcpv": a.fcpv.model_dump(),
+        "factors": submitted,
+        "notes": notes_clean,
+        "context_interview_id": context_interview_id,
         "created_at": now,
         "calc_source": calc_source,
         "calc_notice": calc_notice,

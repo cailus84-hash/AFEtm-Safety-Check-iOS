@@ -37,6 +37,7 @@ export default function ProfileSetup() {
   const [weight, setWeight] = useState('');
   const [sport, setSport] = useState<string>(SPORT_CANONICAL.running);
   const [targetZone, setTargetZone] = useState<'NONE' | 'GREEN' | 'BLUE'>('NONE');
+  const [athleteId, setAthleteId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -57,6 +58,7 @@ export default function ProfileSetup() {
         setWeight(String(p.weight));
         setSport(p.sport);
         setTargetZone(p.target_zone === 'BLUE' ? 'BLUE' : p.target_zone === 'GREEN' ? 'GREEN' : 'NONE');
+        setAthleteId(p.athlete_id ? String(p.athlete_id) : '');
       }
       setInitializing(false);
     })();
@@ -79,6 +81,15 @@ export default function ProfileSetup() {
     if (!ageN || ageN < 10 || ageN > 90) return setError(t('setup.error.age'));
     if (!weightN || weightN < 20 || weightN > 250) return setError(t('setup.error.weight'));
 
+    // Optional AFEtm athleteId — validate positive int if provided.
+    let athleteIdN: number | null = null;
+    if (athleteId.trim()) {
+      athleteIdN = parseInt(athleteId.trim(), 10);
+      if (!Number.isFinite(athleteIdN) || athleteIdN <= 0) {
+        return setError(t('setup.error.athleteId'));
+      }
+    }
+
     setSaving(true);
     try {
       await saveProfile({
@@ -88,6 +99,7 @@ export default function ProfileSetup() {
         weight: weightN,
         sport,
         target_zone: targetZone === 'NONE' ? null : targetZone,
+        athlete_id: athleteIdN,
       });
       // First time here → send the athlete through the introduction tour
       // before landing on the tabs. Skipping / finishing the tour marks
@@ -161,6 +173,23 @@ export default function ProfileSetup() {
                   placeholderTextColor={colors.onSurfaceTertiary}
                 />
               </View>
+            </View>
+
+            <View>
+              <Text style={shared.label}>{t('setup.field.athleteId')}</Text>
+              <TextInput
+                testID="profile-athleteid-input"
+                style={shared.input}
+                value={athleteId}
+                onChangeText={(txt) => setAthleteId(txt.replace(/[^0-9]/g, ''))}
+                keyboardType="number-pad"
+                placeholder={t('setup.field.athleteId.ph')}
+                placeholderTextColor={colors.onSurfaceTertiary}
+                maxLength={10}
+              />
+              <Text style={[shared.muted, { marginTop: 6 }]}>
+                {t('setup.field.athleteId.hint')}
+              </Text>
             </View>
 
             <View>

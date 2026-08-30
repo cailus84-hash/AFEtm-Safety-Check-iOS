@@ -14,36 +14,43 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
-import { createAssessment, fetchProfile, getDeviceId, UpstreamError } from '@/src/lib/api';
+import {
+  createAssessment,
+  fetchProfile,
+  getDeviceId,
+  UpstreamError,
+  CONTEXT_FACTORS,
+  CONTEXT_NOTES_MAX,
+  type ContextFactor,
+} from '@/src/lib/api';
 import { useI18n } from '@/src/lib/i18n';
 
 const TIMES = ['0', '60', '90', '120', '150', '180'] as const;
 
-const FCPV_QUESTIONS: {
-  key: 'sleep' | 'hydration' | 'symptoms' | 'recent_illness' | 'subjective_load';
-}[] = [
-  { key: 'sleep' },
-  { key: 'hydration' },
-  { key: 'symptoms' },
-  { key: 'recent_illness' },
-  { key: 'subjective_load' },
-];
+// Official AFEtm contextual factor icons for the toggle UI. Kept in sync
+// with `CONTEXT_FACTORS` from api.ts (source of truth).
+const FACTOR_ICONS: Record<ContextFactor, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  illness: 'virus-outline',
+  sleep: 'sleep',
+  training: 'run-fast',
+  dehydration: 'cup-water',
+  medication: 'pill',
+  pain: 'emoticon-sick-outline',
+  stimulants: 'coffee-outline',
+  none: 'checkbox-marked-circle-outline',
+};
 
 export default function NewAssessment() {
   const router = useRouter();
   const { t } = useI18n();
   const [step, setStep] = useState(0);
   const [age, setAge] = useState<number | null>(null);
+  const [hasAthleteId, setHasAthleteId] = useState(false);
   const [deviceId, setDeviceId] = useState('');
   const [fcr, setFcr] = useState('');
   const [readings, setReadings] = useState<Record<string, string>>({});
-  const [fcpv, setFcpv] = useState({
-    sleep: 0,
-    hydration: 0,
-    symptoms: 0,
-    recent_illness: 0,
-    subjective_load: 0,
-  });
+  const [factors, setFactors] = useState<ContextFactor[]>([]);
+  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,11 +64,24 @@ export default function NewAssessment() {
         return;
       }
       setAge(p.age);
+      setHasAthleteId(!!p.athlete_id && p.athlete_id > 0);
     })();
   }, [router]);
 
   const fcpTarget = useMemo(() => (age ? Math.round(0.8 * (220 - age)) : 0), [age]);
   const totalSteps = 4;
+
+  const toggleFactor = (f: ContextFactor) => {
+    setFactors((prev) => {
+      // "none" is exclusive: selecting it clears the others; selecting any
+      // other factor removes "none".
+      if (f === 'none') {
+        return prev.includes('none') ? [] : ['none'];
+      }
+      const next = prev.filter((x) => x !== 'none');
+      return next.includes(f) ? next.filter((x) => x !== f) : [...next, f];
+    });
+  };
 
   const validateStep = (): string | null => {
     if (step === 0) {
@@ -76,6 +96,10 @@ export default function NewAssessment() {
       }
       const peak = parseInt(readings['0'], 10);
       if (peak < fcpTarget - 20) return t('assess.error.peak', { fcp: fcpTarget });
+      return null;
+    }
+    if (step === 3) {
+      if (!factors.length) return t('assess.error.factors');
       return null;
     }
     return null;
@@ -96,6 +120,7 @@ export default function NewAssessment() {
   const submit = async () => {
     const err = validateStep();
     if (err) return setError(err);
+    if (!hasAthleteId) return setError(t('assess.error.athleteId'));
     setSubmitting(true);
     setError(null);
     try {
@@ -106,7 +131,8 @@ export default function NewAssessment() {
         fcr: parseInt(fcr, 10),
         age: age!,
         readings: parsedReadings,
-        fcpv,
+        factors,
+        notes: notes.trim() || null,
       });
       router.replace(`/assessment/${res.id}`);
     } catch (e: any) {
@@ -117,6 +143,8 @@ export default function NewAssessment() {
             body: e.upstream_body?.slice(0, 200) || e.message,
           })
         );
+      } else if (typeof e?.message === 'string' && e.message.includes('ATHLETE_ID_MISSING')) {
+        setError(t('assess.error.athleteId'));
       } else {
         setError(e?.message || t('assess.error.generic'));
       }
@@ -211,37 +239,78 @@ export default function NewAssessment() {
           )}
 
           {step === 3 && (
-            <View testID="step-fcpv">
+            <View testID="step-factors">
               <Text style={shared.h2}>{t('assess.context.title')}</Text>
-              <Text style={[shared.body, { marginTop: spacing.sm }]}>{t('assess.context.body')}</Text>
-              <View style={{ gap: spacing.lg, marginTop: spacing.lg }}>
-                {FCPV_QUESTIONS.map((q) => (
-                  <View key={q.key} style={styles.fcpvBlock}>
-                    <Text style={styles.fcpvLabel}>{t(`fcpv.q.${q.key}` as any)}</Text>
-                    <Text style={styles.fcpvHint}>{t(`fcpv.q.${q.key}.hint` as any)}</Text>
-                    <View style={styles.fcpvOpts}>
-                      {[0, 1, 2].map((v) => {
-                        const active = fcpv[q.key] === v;
-                        return (
-                          <Pressable
-                            key={v}
-                            testID={`fcpv-${q.key}-${v}`}
-                            onPress={() => setFcpv((f) => ({ ...f, [q.key]: v }))}
-                            style={[
-                              styles.fcpvOpt,
-                              active && { borderColor: colors.brandGold, backgroundColor: '#1F1B10' },
-                            ]}
-                          >
-                            <Text style={[styles.fcpvOptText, active && { color: colors.brandGold }]}>
-                              {t(`fcpv.q.${q.key}.${v}` as any)}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
+              <Text style={[shared.body, { marginTop: spacing.sm }]}>
+                {t('assess.context.body')}
+              </Text>
+
+              {!hasAthleteId && (
+                <View style={styles.athleteWarn} testID="factors-athlete-warn">
+                  <MaterialCommunityIcons
+                    name="alert-circle-outline"
+                    size={16}
+                    color={colors.zoneRed}
+                  />
+                  <Text style={styles.athleteWarnText}>
+                    {t('assess.error.athleteId')}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.factorsGrid}>
+                {CONTEXT_FACTORS.map((f) => {
+                  const active = factors.includes(f);
+                  return (
+                    <Pressable
+                      key={f}
+                      testID={`factor-${f}`}
+                      onPress={() => toggleFactor(f)}
+                      style={[
+                        styles.factorChip,
+                        active && styles.factorChipActive,
+                        f === 'none' && styles.factorChipNone,
+                        f === 'none' && active && styles.factorChipNoneActive,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={FACTOR_ICONS[f]}
+                        size={18}
+                        color={active ? '#000' : colors.brandGold}
+                      />
+                      <Text
+                        style={[
+                          styles.factorChipText,
+                          active && { color: '#000' },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {t(`assess.factor.${f}` as any)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+              <Text style={[shared.muted, { marginTop: spacing.sm }]}>
+                {t('assess.context.none.hint')}
+              </Text>
+
+              <Text style={[shared.label, { marginTop: spacing.xl }]}>
+                {t('assess.context.notes')}
+              </Text>
+              <TextInput
+                testID="factors-notes-input"
+                value={notes}
+                onChangeText={(txt) => setNotes(txt.slice(0, CONTEXT_NOTES_MAX))}
+                placeholder={t('assess.context.notes.ph')}
+                placeholderTextColor={colors.onSurfaceTertiary}
+                style={styles.notesInput}
+                multiline
+                maxLength={CONTEXT_NOTES_MAX}
+              />
+              <Text style={styles.notesCount}>
+                {t('assess.context.notes.count', { n: notes.length })}
+              </Text>
             </View>
           )}
 
@@ -348,6 +417,60 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   fcpvOptText: { color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: '600' },
+  // AFEtm contextual factor chips (multi-select). "none" gets a distinctive
+  // dashed green outline to signal its exclusive-clear behaviour.
+  athleteWarn: {
+    flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+    padding: spacing.md, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.zoneRed,
+    backgroundColor: 'rgba(220,53,69,0.08)',
+    marginTop: spacing.md,
+  },
+  athleteWarnText: { flex: 1, color: colors.zoneRed, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  factorsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  factorChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceSecondary,
+    minWidth: '48%',
+    flexGrow: 1,
+  },
+  factorChipActive: {
+    backgroundColor: colors.brandGold,
+    borderColor: colors.brandGold,
+  },
+  factorChipNone: {
+    borderColor: colors.zoneGreen,
+    borderStyle: 'dashed',
+  },
+  factorChipNoneActive: {
+    backgroundColor: colors.zoneGreen,
+    borderColor: colors.zoneGreen,
+    borderStyle: 'solid',
+  },
+  factorChipText: {
+    flex: 1,
+    color: colors.onSurface, fontSize: 12, fontWeight: '700',
+  },
+  notesInput: {
+    minHeight: 96,
+    padding: spacing.md,
+    marginTop: 6,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    color: colors.onSurface, fontSize: 13, lineHeight: 18,
+    textAlignVertical: 'top',
+  },
+  notesCount: {
+    color: colors.onSurfaceTertiary, fontSize: 11,
+    textAlign: 'right', marginTop: 4,
+  },
   error: { color: colors.zoneRed, fontSize: 13, fontWeight: '600', marginTop: spacing.lg },
   footer: {
     padding: spacing.xl, paddingTop: spacing.md,

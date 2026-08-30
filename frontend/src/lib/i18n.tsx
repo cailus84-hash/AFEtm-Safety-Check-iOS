@@ -340,8 +340,14 @@ const dict = {
     'setup.error.name': 'Enter your name.',
     'setup.error.age': 'Age must be between 10 and 90.',
     'setup.error.weight': 'Weight must be between 20 and 250 kg.',
+    'setup.error.athleteId':
+      'AFEtm athleteId must be a positive number. Leave empty if you do not have one yet.',
     'setup.error.save': 'Could not save profile.',
     'setup.save': 'Save profile',
+    'setup.field.athleteId': 'AFEtm athleteId',
+    'setup.field.athleteId.ph': 'e.g. 1024',
+    'setup.field.athleteId.hint':
+      'Numeric ID provided by WeWon Smart Sport Solutions LLC. Required before running an assessment. AFEtm never invents identifiers.',
     'sport.running': 'Running',
     'sport.cycling': 'Cycling',
     'sport.football': 'Football',
@@ -428,13 +434,30 @@ const dict = {
       'Record your HR at the following intervals (seconds since the effort ended).',
     'assess.readings.hint':
       't=0s is your HR when you reach the FCP. t=180s is your HR at 3 minutes.',
-    'assess.context.title': 'Preventive context',
+    'assess.context.title': 'AFEtm Contextual Interview',
     'assess.context.body':
-      'These questions tune the operational interpretation. They do not modify the computed zone.',
+      'Select the factors that apply to you right now. This is required by the official AFEtm engine before every assessment.',
+    'assess.context.notes': 'Notes (optional)',
+    'assess.context.notes.ph':
+      'Anything else the AFEtm engine should know about this assessment (max 2,000 characters).',
+    'assess.context.notes.count': '{n} / 2000',
+    'assess.context.none.hint': 'Tapping “None” clears every other factor.',
+    'assess.factor.illness': 'Recent or current illness',
+    'assess.factor.sleep': 'Poor sleep',
+    'assess.factor.training': 'Elevated recent training load',
+    'assess.factor.dehydration': 'Poor hydration',
+    'assess.factor.medication': 'Medication use',
+    'assess.factor.pain': 'Pain or discomfort',
+    'assess.factor.stimulants': 'Stimulants (caffeine / energy drinks)',
+    'assess.factor.none': 'No relevant contextual factors',
     'assess.submit': 'Compute result',
     'assess.error.rhr': 'RHR must be between 30 and 130 bpm.',
     'assess.error.reading': 'Reading t={t}s must be between 40 and 230 bpm.',
     'assess.error.peak': 'Peak HR (t=0s) must be close to the FCP target ({fcp}).',
+    'assess.error.factors':
+      'Select at least one AFEtm contextual factor before continuing. Use “None” if none applies.',
+    'assess.error.athleteId':
+      'Your profile is missing an AFEtm athleteId. Please add it under Profile before running an assessment. AFEtm never invents identifiers.',
     'assess.error.upstream':
       'Authoritative AFEtm server rejected the request (HTTP {status}). Detail: {body}. The assessment WAS NOT saved.',
     'assess.error.generic': 'Could not compute the assessment.',
@@ -936,8 +959,14 @@ const dict = {
     'setup.error.name': 'Ingresa tu nombre.',
     'setup.error.age': 'Edad debe ser entre 10 y 90.',
     'setup.error.weight': 'Peso debe ser entre 20 y 250 kg.',
+    'setup.error.athleteId':
+      'El athleteId AFEtm debe ser un número positivo. Déjalo vacío si aún no lo tienes.',
     'setup.error.save': 'No se pudo guardar el perfil.',
     'setup.save': 'Guardar perfil',
+    'setup.field.athleteId': 'AFEtm athleteId',
+    'setup.field.athleteId.ph': 'ej. 1024',
+    'setup.field.athleteId.hint':
+      'Identificador numérico entregado por WeWon Smart Sport Solutions LLC. Obligatorio antes de realizar una evaluación. AFEtm nunca inventa identificadores.',
     'sport.running': 'Running',
     'sport.cycling': 'Ciclismo',
     'sport.football': 'Fútbol',
@@ -1021,13 +1050,30 @@ const dict = {
       'Registra tu FC en los siguientes intervalos (segundos desde el fin del esfuerzo).',
     'assess.readings.hint':
       't=0s es tu FC al alcanzar la FCP. t=180s es tu FC a los 3 minutos.',
-    'assess.context.title': 'Contexto preventivo',
+    'assess.context.title': 'Entrevista Contextual AFEtm',
     'assess.context.body':
-      'Estas preguntas ajustan la interpretación operativa. No modifican la zona calculada.',
+      'Selecciona los factores que te aplican ahora. Es obligatorio para el motor oficial AFEtm antes de cada evaluación.',
+    'assess.context.notes': 'Notas (opcional)',
+    'assess.context.notes.ph':
+      'Cualquier otro detalle que el motor AFEtm deba conocer (máximo 2.000 caracteres).',
+    'assess.context.notes.count': '{n} / 2000',
+    'assess.context.none.hint': 'Al tocar “Ninguno” se limpian los demás factores.',
+    'assess.factor.illness': 'Enfermedad reciente o actual',
+    'assess.factor.sleep': 'Sueño deficiente',
+    'assess.factor.training': 'Carga de entrenamiento reciente elevada',
+    'assess.factor.dehydration': 'Hidratación deficiente',
+    'assess.factor.medication': 'Uso de medicación',
+    'assess.factor.pain': 'Dolor o molestia',
+    'assess.factor.stimulants': 'Estimulantes (cafeína / bebidas energéticas)',
+    'assess.factor.none': 'Sin factores contextuales relevantes',
     'assess.submit': 'Calcular resultado',
     'assess.error.rhr': 'FCr debe estar entre 30 y 130 bpm.',
     'assess.error.reading': 'Lectura t={t}s debe estar entre 40 y 230 bpm.',
     'assess.error.peak': 'La FC pico (t=0s) debe estar cerca de la FCP objetivo ({fcp}).',
+    'assess.error.factors':
+      'Selecciona al menos un factor contextual AFEtm para continuar. Usa “Ninguno” si no aplica ninguno.',
+    'assess.error.athleteId':
+      'Tu perfil no tiene un athleteId AFEtm. Agrégalo en Perfil antes de realizar una evaluación. AFEtm nunca inventa identificadores.',
     'assess.error.upstream':
       'Servidor autoritativo AFEtm rechazó la solicitud (HTTP {status}). Detalle: {body}. La evaluación NO se guardó.',
     'assess.error.generic': 'No se pudo calcular la evaluación.',
