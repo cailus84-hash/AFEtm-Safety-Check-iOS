@@ -16,6 +16,14 @@ import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { fetchProfile, getDeviceId } from '@/src/lib/api';
 import { useI18n } from '@/src/lib/i18n';
 
+// Language-aware AFEtm Visual Color Guide. Both PNGs are the official
+// artwork approved by the client (EN + ES). The `require` map keeps the
+// static bundler resolution intact while letting us swap at runtime.
+const HERO_BY_LANG = {
+  en: require('../assets/images/afetm-hero-en.png'),
+  es: require('../assets/images/afetm-hero-es.png'),
+} as const;
+
 export default function Index() {
   const router = useRouter();
   const { t, lang, toggle } = useI18n();
@@ -100,7 +108,7 @@ export default function Index() {
             <View style={styles.heroImageShadow}>
               <Image
                 testID="onboarding-hero-image"
-                source={require('../assets/images/afetm-hero.png')}
+                source={HERO_BY_LANG[lang] ?? HERO_BY_LANG.en}
                 style={styles.heroImage}
                 resizeMode="contain"
                 accessibilityLabel={t('onboarding.hero.alt')}
@@ -234,8 +242,8 @@ const styles = StyleSheet.create({
   },
   heroImageShadow: {
     width: '100%',
-    aspectRatio: 4 / 5,
-    maxHeight: 340,
+    aspectRatio: 1122 / 1402,
+    maxHeight: 520,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
