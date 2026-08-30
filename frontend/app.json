@@ -38,6 +38,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withPolarBle.js",
       [
         "expo-splash-screen",
         {

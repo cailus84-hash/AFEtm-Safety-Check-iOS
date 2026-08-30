@@ -73,6 +73,20 @@ function getManager(): BleManager | null {
 }
 
 export function useHeartRateMonitor() {
+  // Prefer the official Polar BLE SDK when the native module is present
+  // (dev/production builds). In Expo Go / web preview the module is not
+  // linked, so we transparently fall back to the generic HR-service
+  // implementation powered by react-native-ble-plx.
+  //
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const polar = require('@/src/native/PolarBle').default;
+  if (polar?.available) {
+    return useHeartRateMonitorPolar();
+  }
+  return useHeartRateMonitorGeneric();
+}
+
+function useHeartRateMonitorGeneric() {
   const [status, setStatus] = useState<HrStatus>('idle');
   const [devices, setDevices] = useState<HrDevice[]>([]);
   const [connectedDevice, setConnectedDevice] = useState<HrDevice | null>(null);
@@ -320,6 +334,120 @@ export function useHeartRateMonitor() {
 
   return {
     supported,
+    status,
+    devices,
+    connectedDevice,
+    hr,
+    error,
+    isReconnecting,
+    reconnectAttempt,
+    startScan,
+    stopScan,
+    connect,
+    disconnect,
+    averageLastMs,
+  };
+}
+
+/**
+ * useHeartRateMonitorPolar
+ *
+ * Same public shape as useHeartRateMonitorGeneric — powered by the
+ * native Polar BLE SDK module (iOS + Android). Only exports HR; no
+ * PPG / ACC / session recording. The AFEtm classification stays on the
+ * Replit backend.
+ */
+function useHeartRateMonitorPolar() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const PolarBle = require('@/src/native/PolarBle').default;
+
+  const [status, setStatus] = useState<HrStatus>('idle');
+  const [devices, setDevices] = useState<HrDevice[]>([]);
+  const [connectedDevice, setConnectedDevice] = useState<HrDevice | null>(null);
+  const [hr, setHr] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isReconnecting] = useState(false);
+  const [reconnectAttempt] = useState(0);
+  const historyRef = useRef<{ t: number; hr: number }[]>([]);
+
+  useEffect(() => {
+    const subDev = PolarBle.onDevice((d: any) => {
+      setDevices((prev) =>
+        prev.find((x) => x.id === d.id)
+          ? prev
+          : [...prev, { id: d.id, name: d.name || 'Polar', rssi: d.rssi ?? null }]
+      );
+    });
+    const subState = PolarBle.onState((s: any) => {
+      switch (s.status) {
+        case 'connecting': setStatus('connecting'); break;
+        case 'connected':
+          setStatus('connected');
+          setConnectedDevice({ id: s.id, name: s.name || 'Polar', rssi: null });
+          break;
+        case 'disconnected':
+          setStatus((cur) => (cur === 'connected' ? 'error' : cur));
+          setConnectedDevice(null);
+          break;
+        case 'scan-error':
+          setError(s.message || 'Scan error');
+          setStatus('error');
+          break;
+      }
+    });
+    const subHr = PolarBle.onHr((s: any) => {
+      setHr(s.hr);
+      historyRef.current.push({ t: Date.now(), hr: s.hr });
+      if (historyRef.current.length > 200) historyRef.current.shift();
+    });
+    return () => {
+      subDev?.remove?.();
+      subState?.remove?.();
+      subHr?.remove?.();
+    };
+  }, [PolarBle]);
+
+  const startScan = useCallback(async () => {
+    setError(null);
+    setDevices([]);
+    setStatus('scanning');
+    try { await PolarBle.startScan(); } catch (e: any) {
+      setError(e?.message || 'Polar scan error');
+      setStatus('error');
+    }
+  }, [PolarBle]);
+
+  const stopScan = useCallback(async () => {
+    try { await PolarBle.stopScan(); } catch {}
+  }, [PolarBle]);
+
+  const connect = useCallback(async (deviceId: string) => {
+    setStatus('connecting');
+    try { await PolarBle.connect(deviceId); } catch (e: any) {
+      setError(e?.message || 'Polar connect error');
+      setStatus('error');
+    }
+  }, [PolarBle]);
+
+  const disconnect = useCallback(async () => {
+    try { if (connectedDevice) await PolarBle.disconnect(connectedDevice.id); } catch {}
+    setStatus('idle');
+    setConnectedDevice(null);
+  }, [PolarBle, connectedDevice]);
+
+  const averageLastMs = useCallback(
+    (ms: number) => {
+      const now = Date.now();
+      const samples = historyRef.current.filter((s) => now - s.t <= ms);
+      if (samples.length === 0) return hr ?? null;
+      const sum = samples.reduce((a, s) => a + s.hr, 0);
+      return Math.round(sum / samples.length);
+    },
+    [hr]
+  );
+
+  return {
+    supported: true,
     status,
     devices,
     connectedDevice,
