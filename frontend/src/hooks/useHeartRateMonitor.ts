@@ -72,18 +72,23 @@ function getManager(): BleManager | null {
   }
 }
 
+// Resolve which HR hook implementation to use ONCE at module load.
+// This avoids the classic rules-of-hooks violation of calling different
+// hooks based on a runtime check inside a single hook.
+//
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _polarNative = require('@/src/native/PolarBle').default;
+const _POLAR_AVAILABLE: boolean = !!_polarNative?.available;
+
 export function useHeartRateMonitor() {
   // Prefer the official Polar BLE SDK when the native module is present
   // (dev/production builds). In Expo Go / web preview the module is not
   // linked, so we transparently fall back to the generic HR-service
   // implementation powered by react-native-ble-plx.
-  //
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const polar = require('@/src/native/PolarBle').default;
-  if (polar?.available) {
-    return useHeartRateMonitorPolar();
-  }
-  return useHeartRateMonitorGeneric();
+  // The choice is captured at module-load time, so React always calls
+  // the same hook in the same order for the lifetime of the app.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return _POLAR_AVAILABLE ? useHeartRateMonitorPolar() : useHeartRateMonitorGeneric();
 }
 
 function useHeartRateMonitorGeneric() {
@@ -358,8 +363,9 @@ function useHeartRateMonitorGeneric() {
  * Replit backend.
  */
 function useHeartRateMonitorPolar() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const PolarBle = require('@/src/native/PolarBle').default;
+  // Reuse the module-level require captured at load time. The eslint
+  // directive above suppresses the require-imports rule for that line.
+  const PolarBle = _polarNative;
 
   const [status, setStatus] = useState<HrStatus>('idle');
   const [devices, setDevices] = useState<HrDevice[]>([]);

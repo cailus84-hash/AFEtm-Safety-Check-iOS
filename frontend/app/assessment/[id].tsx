@@ -32,7 +32,7 @@ const TIMES = ['0', '60', '90', '120', '150', '180'];
 export default function AssessmentDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { t, formatDateTime, lang } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const { width } = useWindowDimensions();
   const [a, setA] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
