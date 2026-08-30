@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -222,6 +223,20 @@ export default function Terms() {
             <Checkbox testID="terms-chk-institutional" checked={c2} onToggle={() => setC2((v) => !v)} label={t('terms.checkbox.institutional')} />
             <Checkbox testID="terms-chk-terms" checked={c3} onToggle={() => setC3((v) => !v)} label={t('terms.checkbox.terms')} />
 
+            <Pressable
+              testID="terms-privacy-link"
+              style={({ pressed }) => [styles.privacyLink, pressed && { opacity: 0.7 }]}
+              onPress={() =>
+                Linking.openURL('https://www.wewonsss.com/privacy-policy').catch(() => {})
+              }
+              accessibilityRole="link"
+            >
+              <MaterialCommunityIcons name="shield-lock-outline" size={14} color={colors.brandGold} />
+              <Text style={styles.privacyLinkText}>{t('terms.privacy.link')}</Text>
+              <MaterialCommunityIcons name="open-in-new" size={12} color={colors.brandGold} />
+            </Pressable>
+            <Text style={styles.privacyHint}>{t('terms.privacy.hint')}</Text>
+
             <View style={styles.instCard}>
               <View style={styles.instCardHeader}>
                 <MaterialCommunityIcons
@@ -397,6 +412,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkboxLabel: { color: colors.onSurface, fontSize: 13, lineHeight: 19, flex: 1 },
+  privacyLink: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    marginTop: spacing.xs || 4,
+    marginLeft: spacing.md + 22,
+    borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: '#1F1B10',
+  },
+  privacyLinkText: {
+    color: colors.brandGold, fontSize: 12, fontWeight: '800', letterSpacing: 0.4,
+  },
+  privacyHint: {
+    color: colors.onSurfaceTertiary, fontSize: 11, marginTop: 4,
+    marginLeft: spacing.md + 22,
+  },
   instCard: {
     // Stack the card vertically so the CTA never squeezes the title
     // into a 1-char column on narrow screens (regression seen in ES).

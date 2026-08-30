@@ -18,6 +18,9 @@ Tagline (ES): *Antes de entrenar. Antes de competir. Antes de exigir más.*
      third-party use requires express authorization from WeWon Smart
      Sport Solutions LLC."
    - "I accept the Terms of Use and Privacy Policy."
+     A tappable pill link *"Read the Privacy Policy"* right below the
+     third checkbox opens `https://www.wewonsss.com/privacy-policy` via
+     `Linking.openURL` (required for App Store review).
    Acceptance is persisted via `POST /api/profile/accept-terms` with
    `terms_version` (currently `1.0`) + ISO timestamp.
 3. `/profile-setup` — Athlete profile (name, age, weight, sport, target zone).

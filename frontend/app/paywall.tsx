@@ -26,11 +26,20 @@ import {
  * Paywall / subscription screen.
  *
  * Native-store subscriptions only (Apple IAP / Google Play Billing).
- * Backend `/api/subscription/*` acts as the mirror for gating. Stripe
- * is intentionally NOT wired here.
+ * The mobile app NEVER renders credit-card inputs and NEVER stores card
+ * information. The whole payment method flow is delegated to the store.
+ *
+ * Hierarchy (approved by product):
+ *   1. Hero CTA  → "Start 1 Month Free" ($0 today)
+ *   2. Plan tiles (Monthly / Annual — Best Value) shown *below* the
+ *      free-trial CTA. These become the recurring price after the trial
+ *      and are the fallback for athletes who already used the trial.
+ *   3. Store disclosure block (mandatory pre-confirmation copy).
+ *   4. Secondary actions: Restore Purchases · Manage Subscription.
  *
  * Route: `/paywall`
- *   ?mode=upgrade → hides the "Not now" dismissal (used from Manage).
+ *   ?mode=upgrade → hides the "Not now" dismissal and the trial CTA
+ *                   (used from Manage Subscription).
  */
 export default function Paywall() {
   const router = useRouter();
@@ -58,19 +67,16 @@ export default function Paywall() {
       if (kind === 'trial') {
         setMessage({ tone: 'ok', text: t('paywall.success.trial') });
       } else if (kind === 'restore') {
-        // Restore: only celebrate if we actually have access.
         if (sub.status === 'active' || sub.status === 'trial') {
           setMessage({ tone: 'ok', text: t('paywall.success.purchase') });
         }
       } else {
         setMessage({ tone: 'ok', text: t('paywall.success.purchase') });
       }
-      // If access is granted, jump back to the home tabs.
       if (sub.status === 'active' || sub.status === 'trial') {
         setTimeout(() => router.replace('/(tabs)'), 700);
       }
     } catch (e: any) {
-      // Backend uses HTTP 409 TRIAL_ALREADY_USED — surface the specific copy.
       const msg = e?.message?.includes('TRIAL_ALREADY_USED')
         ? t('paywall.trialUsed')
         : e?.message || t(errKey);
@@ -128,7 +134,52 @@ export default function Paywall() {
             <Benefit icon="chart-timeline-variant" text={t('paywall.benefit.recovery')} />
           </View>
 
-          {/* Yearly (best value) */}
+          {/* HERO: Start 1 Month Free */}
+          {!isUpgrade && (
+            <View style={styles.heroCard} testID="paywall-hero-trial">
+              <View style={styles.heroBadge}>
+                <MaterialCommunityIcons name="star-four-points" size={11} color="#000" />
+                <Text style={styles.heroBadgeText}>{t('paywall.trialBadge')}</Text>
+              </View>
+              <Text style={styles.heroPrice}>$0</Text>
+              <Text style={styles.heroPriceLabel}>{t('paywall.cta.trial.sub')}</Text>
+              <Pressable
+                testID="paywall-cta-trial"
+                disabled={busy !== null}
+                onPress={() => dispatch('trial', 'paywall.error.trial')}
+                style={({ pressed }) => [
+                  styles.heroBtn,
+                  (busy || pressed) && { opacity: 0.9 },
+                ]}
+              >
+                {busy === 'trial' ? <ActivityIndicator color="#000" /> : (
+                  <>
+                    <MaterialCommunityIcons name="gift-outline" size={16} color="#000" />
+                    <Text style={styles.heroBtnText}>{t('paywall.cta.trial')}</Text>
+                  </>
+                )}
+              </Pressable>
+
+              {/* Mandatory disclosure — shown BEFORE the store confirmation. */}
+              <View style={styles.disclosure}>
+                <Text style={styles.disclosureTitle}>{t('paywall.disclosure.title')}</Text>
+                <DiscRow icon="cash-remove" strong text={t('paywall.disclosure.today')} />
+                <DiscRow icon="autorenew" text={t('paywall.disclosure.renew')} />
+                <DiscRow icon="cellphone-lock" text={t('paywall.disclosure.store')} />
+              </View>
+            </View>
+          )}
+
+          {/* PLANS after the trial */}
+          <View style={styles.plansHeaderRow}>
+            <View style={styles.plansHeaderLine} />
+            <Text style={styles.plansHeaderText}>
+              {isUpgrade ? t('paywall.eyebrow') : t('paywall.trialBadge') /* small caps chip */}
+            </Text>
+            <View style={styles.plansHeaderLine} />
+          </View>
+
+          {/* Annual (Best Value) */}
           <View
             testID="paywall-plan-yearly"
             style={[styles.plan, styles.planYearly]}
@@ -186,39 +237,41 @@ export default function Paywall() {
             </Pressable>
           </View>
 
-          {/* Free trial CTA */}
-          {!isUpgrade && (
+          {/* Secondary actions row */}
+          <View style={styles.linksRow}>
             <Pressable
-              testID="paywall-cta-trial"
+              testID="paywall-restore"
               disabled={busy !== null}
-              onPress={() => dispatch('trial', 'paywall.error.trial')}
-              style={({ pressed }) => [
-                styles.trialBtn,
-                (busy || pressed) && { opacity: 0.9 },
-              ]}
+              onPress={() => dispatch('restore', 'paywall.error.restore')}
+              style={styles.linkBtn}
             >
-              {busy === 'trial' ? <ActivityIndicator color={colors.brandGold} /> : (
+              {busy === 'restore' ? (
+                <ActivityIndicator color={colors.onSurfaceTertiary} />
+              ) : (
                 <>
-                  <MaterialCommunityIcons name="gift-outline" size={16} color={colors.brandGold} />
-                  <Text style={styles.trialBtnText}>{t('paywall.cta.trial')}</Text>
+                  <MaterialCommunityIcons
+                    name="restore"
+                    size={14}
+                    color={colors.onSurfaceSecondary}
+                  />
+                  <Text style={styles.linkText}>{t('paywall.restore')}</Text>
                 </>
               )}
             </Pressable>
-          )}
-
-          {/* Restore + result */}
-          <Pressable
-            testID="paywall-restore"
-            disabled={busy !== null}
-            onPress={() => dispatch('restore', 'paywall.error.restore')}
-            style={{ alignSelf: 'center', paddingVertical: spacing.sm, marginTop: spacing.md }}
-          >
-            {busy === 'restore' ? (
-              <ActivityIndicator color={colors.onSurfaceTertiary} />
-            ) : (
-              <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
-            )}
-          </Pressable>
+            <View style={styles.linksDot} />
+            <Pressable
+              testID="paywall-manage"
+              onPress={() => router.push('/manage-subscription')}
+              style={styles.linkBtn}
+            >
+              <MaterialCommunityIcons
+                name="cog-outline"
+                size={14}
+                color={colors.onSurfaceSecondary}
+              />
+              <Text style={styles.linkText}>{t('paywall.manage')}</Text>
+            </Pressable>
+          </View>
 
           {message && (
             <View
@@ -255,6 +308,21 @@ function Benefit({ icon, text }: { icon: any; text: string }) {
         <MaterialCommunityIcons name={icon} size={16} color={colors.brandGold} />
       </View>
       <Text style={styles.benefitText}>{text}</Text>
+    </View>
+  );
+}
+
+function DiscRow({
+  icon, text, strong,
+}: { icon: any; text: string; strong?: boolean }) {
+  return (
+    <View style={styles.discRow}>
+      <MaterialCommunityIcons
+        name={icon}
+        size={14}
+        color={strong ? colors.brandGold : colors.onSurfaceSecondary}
+      />
+      <Text style={[styles.discText, strong && styles.discTextStrong]}>{text}</Text>
     </View>
   );
 }
@@ -299,6 +367,73 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   benefitText: { flex: 1, color: colors.onSurface, fontSize: 13, fontWeight: '600' },
+
+  /* Hero (free trial) */
+  heroCard: {
+    borderRadius: radius.lg,
+    borderWidth: 2, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    shadowColor: colors.brandGold, shadowOpacity: 0.45, shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 }, elevation: 8,
+    alignItems: 'center',
+  },
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandGold,
+    marginBottom: spacing.sm,
+  },
+  heroBadgeText: { color: '#000', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  heroPrice: {
+    color: colors.brandGold, fontSize: 48, fontWeight: '900',
+    letterSpacing: 1, lineHeight: 52,
+  },
+  heroPriceLabel: {
+    color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: '700',
+    letterSpacing: 0.3, marginTop: 2, textAlign: 'center',
+  },
+  heroBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    alignSelf: 'stretch',
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandGold,
+  },
+  heroBtnText: {
+    color: '#000', fontSize: 14, fontWeight: '900',
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+  disclosure: {
+    alignSelf: 'stretch',
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    gap: 8,
+  },
+  disclosureTitle: {
+    color: colors.brandGold, fontSize: 10, letterSpacing: 1.5, fontWeight: '800',
+    marginBottom: 2,
+  },
+  discRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  discText: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 17 },
+  discTextStrong: { color: colors.onSurface, fontWeight: '800' },
+
+  /* Plans header */
+  plansHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  plansHeaderLine: { flex: 1, height: 1, backgroundColor: colors.divider },
+  plansHeaderText: {
+    color: colors.onSurfaceTertiary, fontSize: 10, letterSpacing: 2, fontWeight: '800',
+  },
+
   plan: {
     borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.surfaceSecondary,
@@ -340,16 +475,25 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase',
   },
-  trialBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    marginTop: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceSecondary,
+
+  linksRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
   },
-  trialBtnText: { color: colors.brandGold, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
-  restoreText: { color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textDecorationLine: 'underline' },
+  linkBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: spacing.sm,
+  },
+  linkText: {
+    color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5,
+    textDecorationLine: 'underline',
+  },
+  linksDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: colors.onSurfaceTertiary, opacity: 0.5,
+  },
+
   msg: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
     marginTop: spacing.md, padding: spacing.md,

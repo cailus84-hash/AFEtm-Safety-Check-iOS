@@ -88,6 +88,8 @@ const dict = {
       'I understand that institutional, team, professional, research or third-party use requires express authorization from WeWon Smart Sport Solutions LLC.',
     'terms.checkbox.terms':
       'I accept the Terms of Use and Privacy Policy.',
+    'terms.privacy.link': 'Read the Privacy Policy',
+    'terms.privacy.hint': 'Opens wewonsss.com/privacy-policy in your browser.',
     'terms.institutional.cta': 'Need institutional access?',
     'terms.institutional.link': 'Request institutional access',
     'terms.accept': 'Accept and continue',
@@ -205,10 +207,18 @@ const dict = {
     'paywall.plan.yearly.price': '$199.99 / year',
     'paywall.plan.yearly.badge': 'BEST VALUE',
     'paywall.plan.yearly.save': 'Save {p}% vs monthly',
-    'paywall.cta.trial': 'Start 1-month free trial',
-    'paywall.cta.monthly': 'Choose monthly plan',
-    'paywall.cta.yearly': 'Choose yearly plan',
-    'paywall.restore': 'Restore purchases',
+    'paywall.cta.trial': 'Start 1 Month Free',
+    'paywall.cta.monthly': 'Monthly $19.99',
+    'paywall.cta.yearly': 'Annual $199.99',
+    'paywall.cta.trial.sub': '$0 today · Cancel anytime in your store',
+    'paywall.disclosure.title': "WHAT HAPPENS WHEN YOU TAP “START 1 MONTH FREE”",
+    'paywall.disclosure.today': '$0 today.',
+    'paywall.disclosure.renew':
+      'Your subscription automatically renews after the 1-month free trial unless canceled through the App Store or Google Play at least 24 hours before the trial ends.',
+    'paywall.disclosure.store':
+      'Payment method is required and managed by Apple or Google. AFEtm never sees or stores card information.',
+    'paywall.manage': 'Manage Subscription',
+    'paywall.restore': 'Restore Purchases',
     'paywall.legal.tool':
       'AFEtm Safety Check is a preventive and educational tool. It is not clinical.',
     'paywall.legal.renew':
@@ -570,11 +580,27 @@ const dict = {
     'guide.eyebrow': 'AFE™ VISUAL GUIDE',
     'guide.title': 'Color interpretation',
     'guide.subtitle':
-      'Guided classification based on the physiological evaluation of the day.',
+      'A simple, user-friendly overview of what each color means for your next training decision.',
     'guide.footer': 'WHAT DOES THIS GUIDE MEAN?',
     'guide.h1': 'Supports preventive decision-making.',
     'guide.h2': 'Not a medical diagnostic application.',
     'guide.h3': "Must be interpreted with the athlete's context.",
+    'guide.action.BLUE': 'Continue',
+    'guide.action.GREEN': 'Observe',
+    'guide.action.YELLOW': 'Adjust',
+    'guide.action.RED': 'Stop intense load and reassess',
+    'guide.explanation.BLUE': 'Your cardiac recovery today looks excellent.',
+    'guide.explanation.GREEN': 'Your cardiac recovery today looks favorable.',
+    'guide.explanation.YELLOW': 'Your cardiac recovery today shows caution signs.',
+    'guide.explanation.RED': 'Your cardiac recovery today looks compromised.',
+    'guide.recommendation.BLUE':
+      'Continue with your planned session as usual.',
+    'guide.recommendation.GREEN':
+      'Continue normally, staying attentive to how you feel.',
+    'guide.recommendation.YELLOW':
+      'Reduce load, extend warm-up and recovery, and re-check.',
+    'guide.recommendation.RED':
+      'Avoid intense effort. Rest, follow safety protocols and reassess before returning.',
 
     // Zones
     'zone.BLUE.label': 'Blue · Optimal',
@@ -672,6 +698,8 @@ const dict = {
       'Entiendo que el uso institucional, de equipo, profesional, de investigación o de terceros requiere autorización expresa de WeWon Smart Sport Solutions LLC.',
     'terms.checkbox.terms':
       'Acepto los Términos de Uso y la Política de Privacidad.',
+    'terms.privacy.link': 'Leer la Política de Privacidad',
+    'terms.privacy.hint': 'Abre wewonsss.com/privacy-policy en tu navegador.',
     'terms.institutional.cta': '¿Necesitas acceso institucional?',
     'terms.institutional.link': 'Solicitar acceso institucional',
     'terms.accept': 'Aceptar y continuar',
@@ -781,9 +809,17 @@ const dict = {
     'paywall.plan.yearly.price': '$199.99 / año',
     'paywall.plan.yearly.badge': 'MEJOR VALOR',
     'paywall.plan.yearly.save': 'Ahorra {p}% vs mensual',
-    'paywall.cta.trial': 'Iniciar prueba gratis de 1 mes',
-    'paywall.cta.monthly': 'Elegir plan mensual',
-    'paywall.cta.yearly': 'Elegir plan anual',
+    'paywall.cta.trial': 'Comenzar 1 Mes Gratis',
+    'paywall.cta.monthly': 'Mensual $19.99',
+    'paywall.cta.yearly': 'Anual $199.99',
+    'paywall.cta.trial.sub': '$0 hoy · Cancela cuando quieras en tu tienda',
+    'paywall.disclosure.title': 'QUÉ SUCEDE AL TOCAR “COMENZAR 1 MES GRATIS”',
+    'paywall.disclosure.today': '$0 hoy.',
+    'paywall.disclosure.renew':
+      'Tu suscripción se renueva automáticamente después del mes gratis a menos que la canceles en App Store o Google Play al menos 24 horas antes de que finalice la prueba.',
+    'paywall.disclosure.store':
+      'El método de pago lo requiere y lo gestiona Apple o Google. AFEtm nunca ve ni guarda datos de tu tarjeta.',
+    'paywall.manage': 'Gestionar suscripción',
     'paywall.restore': 'Restaurar compras',
     'paywall.legal.tool':
       'AFEtm Safety Check es una herramienta preventiva y educativa, no clínica.',
@@ -1135,11 +1171,27 @@ const dict = {
     'guide.eyebrow': 'GUÍA VISUAL AFE™',
     'guide.title': 'Interpretación por color',
     'guide.subtitle':
-      'Clasificación guiada basada en la evaluación fisiológica del día.',
+      'Resumen simple y claro de lo que significa cada color para tu próxima decisión de entrenamiento.',
     'guide.footer': '¿QUÉ SIGNIFICA ESTA GUÍA?',
     'guide.h1': 'Apoya la toma de decisiones preventivas.',
     'guide.h2': 'No es una aplicación de diagnóstico médico.',
     'guide.h3': 'Debe interpretarse junto con el contexto del atleta.',
+    'guide.action.BLUE': 'Continuar',
+    'guide.action.GREEN': 'Observar',
+    'guide.action.YELLOW': 'Ajustar',
+    'guide.action.RED': 'Detener la carga intensa y reevaluar',
+    'guide.explanation.BLUE': 'Tu recuperación cardiaca hoy se ve excelente.',
+    'guide.explanation.GREEN': 'Tu recuperación cardiaca hoy se ve favorable.',
+    'guide.explanation.YELLOW': 'Tu recuperación cardiaca hoy muestra señales de precaución.',
+    'guide.explanation.RED': 'Tu recuperación cardiaca hoy se ve comprometida.',
+    'guide.recommendation.BLUE':
+      'Continúa con tu sesión planificada como de costumbre.',
+    'guide.recommendation.GREEN':
+      'Continúa normalmente, atento a cómo te sientes.',
+    'guide.recommendation.YELLOW':
+      'Reduce la carga, alarga el calentamiento y la recuperación, y vuelve a chequear.',
+    'guide.recommendation.RED':
+      'Evita esfuerzos intensos. Descansa, sigue el protocolo de seguridad y reevalúa antes de continuar.',
 
     'zone.BLUE.label': 'Azul · Óptimo',
     'zone.GREEN.label': 'Verde · Favorable',
