@@ -25,8 +25,25 @@ db = client[os.environ['DB_NAME']]
 # assessment is stored with `calc_source: "pending"` and the client shows
 # "Resultado pendiente de sincronización con el motor oficial AFEtm." — we
 # never generate a local Blue/Green/Yellow/Red zone.
-AUTHORITATIVE_UPSTREAM_URL = (os.environ.get('AUTHORITATIVE_UPSTREAM_URL') or '').rstrip('/')
-AUTHORITATIVE_UPSTREAM_TOKEN = os.environ.get('AUTHORITATIVE_UPSTREAM_TOKEN') or ''
+def _clean_env(name: str) -> str:
+    """Read an env var defensively for deployed environments.
+
+    Trims whitespace and strips ONE layer of matching surrounding
+    quotes. Rationale: `load_dotenv()` strips quotes in the dev pod,
+    but deployment platforms can inject `.env` values verbatim —
+    INCLUDING the quote characters — which silently corrupts the
+    Bearer header (`Authorization: Bearer "xxx"`) and makes the
+    authoritative Replit server answer 401 Unauthorized only in
+    production. This helper makes the token immune to either style.
+    """
+    v = (os.environ.get(name) or '').strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        v = v[1:-1].strip()
+    return v
+
+
+AUTHORITATIVE_UPSTREAM_URL = _clean_env('AUTHORITATIVE_UPSTREAM_URL').rstrip('/')
+AUTHORITATIVE_UPSTREAM_TOKEN = _clean_env('AUTHORITATIVE_UPSTREAM_TOKEN')
 
 app = FastAPI(title="AFEtm Safety Check API")
 
