@@ -220,6 +220,11 @@ export default function Guided() {
           readings,
           factors,
           notes: notes.trim() || null,
+          // TEMPORARY diagnostic metadata — captures the connected BLE
+          // monitor name so we can trace what the real iPhone sends.
+          safety_confirmed: true,
+          safety_confirmed_at: new Date().toISOString(),
+          ble_device_name: hr.connectedDevice?.name ?? null,
         });
         // Cleanly disconnect before navigating
         await hr.disconnect().catch(() => {});

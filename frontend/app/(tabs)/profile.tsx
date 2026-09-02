@@ -187,6 +187,23 @@ export default function ProfileTab() {
             />
           </Pressable>
 
+          {/* TEMPORARY — developer diagnostics for the AFEtm bridge.
+              Remove once the field investigation is complete. */}
+          <Pressable
+            testID="profile-diagnostics-btn"
+            style={[styles.editBtn, { marginTop: spacing.md, justifyContent: 'flex-start' }]}
+            onPress={() => router.push('/diagnostics')}
+          >
+            <MaterialCommunityIcons name="bug-outline" size={18} color={colors.zoneYellow} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.editBtnText, { color: colors.onSurface }]}>
+                Diagnostics (temp)
+              </Text>
+              <Text style={styles.tourHint}>Assessment bridge trace — developer only</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.onSurfaceTertiary} />
+          </Pressable>
+
           {/* Personal-Use License card */}
           <View style={styles.licenseCard} testID="profile-license-card">
             <View style={styles.licenseHead}>

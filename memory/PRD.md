@@ -188,3 +188,15 @@ Guidelines in `/app/design_guidelines.json`. Dark-first utility aesthetic with g
 - Multi-idioma — v3
 - PDF report generation — v3
 - Background BLE + reconexión automática — v3
+
+## TEMPORARY — Developer Diagnostics (remove after field investigation)
+- Backend: `_new_diag()/_save_diag()` wrapper around `create_assessment` persists
+  every assessment attempt into `db.diagnostics` (payload received, athleteId/Name,
+  HR values, factors, safetyConfirmed, BLE device name, Replit bridge trace,
+  zone). No secrets stored. `GET /api/diagnostics/last?device_id=&limit=`.
+- Frontend: `/diagnostics` screen (route `app/diagnostics.tsx`) + temporary
+  "Diagnostics (temp)" row in Profile tab.
+- `AssessmentIn` gained OPTIONAL diagnostic-only fields: `safety_confirmed`,
+  `safety_confirmed_at`, `ble_device_name` (ignored by assessment logic).
+- Env hardening: `_clean_env()` strips quotes/whitespace from
+  AUTHORITATIVE_UPSTREAM_URL/TOKEN (production 401 root-cause fix).

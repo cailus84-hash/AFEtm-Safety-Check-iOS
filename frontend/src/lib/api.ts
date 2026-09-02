@@ -178,8 +178,50 @@ export async function createAssessment(payload: {
   fcpv?: FCPv;
   factors: ContextFactor[];
   notes?: string | null;
+  // TEMPORARY diagnostic metadata (ignored by assessment logic)
+  safety_confirmed?: boolean;
+  safety_confirmed_at?: string;
+  ble_device_name?: string | null;
 }) {
   return req<Assessment>('/assessments', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** TEMPORARY developer diagnostics — trace of recent assessment attempts. */
+export type DiagnosticEntry = {
+  id: string;
+  device_id: string;
+  timestamp: string;
+  payload_received: boolean;
+  age: number;
+  restingHr: number;
+  maxHr: number | null;
+  hr60s: number | null;
+  hr90s: number | null;
+  hr120s: number | null;
+  hr150s: number | null;
+  hr3m: number | null;
+  factors: string[];
+  notes_present: boolean;
+  safetyConfirmed: boolean | null;
+  safetyConfirmedAt: string | null;
+  bleDeviceName: string | null;
+  athleteId: number | null;
+  athleteName: string | null;
+  upstream_url: string;
+  context_interview_sent: boolean;
+  context_interview_status: number | string | null;
+  assessment_sent: boolean;
+  assessment_status: number | string | null;
+  replit_http_response: Record<string, unknown> | null;
+  authoritative_result_received: boolean;
+  zone: string | null;
+  error: Record<string, unknown> | null;
+};
+
+export async function fetchDiagnostics(deviceId: string, limit = 5) {
+  return req<DiagnosticEntry[]>(
+    `/diagnostics/last?device_id=${encodeURIComponent(deviceId)}&limit=${limit}`
+  );
 }
 
 export async function listAssessments(deviceId: string) {

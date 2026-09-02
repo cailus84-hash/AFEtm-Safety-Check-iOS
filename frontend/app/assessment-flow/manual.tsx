@@ -133,6 +133,10 @@ export default function NewAssessment() {
         readings: parsedReadings,
         factors,
         notes: notes.trim() || null,
+        // TEMPORARY diagnostic metadata — manual mode has no BLE device.
+        safety_confirmed: true,
+        safety_confirmed_at: new Date().toISOString(),
+        ble_device_name: null,
       });
       router.replace(`/assessment/${res.id}`);
     } catch (e: any) {

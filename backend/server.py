@@ -217,6 +217,12 @@ class AssessmentIn(BaseModel):
     # /api/context-interviews before /api/assessments).
     factors: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
+    # --- Diagnostic-only metadata (TEMPORARY). Ignored by all assessment
+    # logic; captured verbatim into the diagnostics log so we can inspect
+    # exactly what a real iPhone sends. Safe to remove later. ---
+    safety_confirmed: Optional[bool] = None
+    safety_confirmed_at: Optional[str] = None
+    ble_device_name: Optional[str] = None
 
 
 class Assessment(BaseModel):
@@ -831,8 +837,87 @@ async def _require_owned_assessment(aid: str, device_id: str) -> dict:
     return doc
 
 
+def _new_diag(a: "AssessmentIn") -> dict:
+    """TEMPORARY developer diagnostic — capture the REAL values Emergent
+    receives from the mobile app before the Replit bridge runs.
+
+    NEVER stores the Bearer token or any secret. Removed once the
+    field investigation is complete."""
+    r = a.readings or {}
+    return {
+        "id": str(uuid.uuid4()),
+        "device_id": a.device_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "payload_received": True,
+        # --- exact values received from the mobile app ---
+        "age": a.age,
+        "restingHr": a.fcr,
+        "maxHr": r.get("0"),
+        "hr60s": r.get("60"),
+        "hr90s": r.get("90"),
+        "hr120s": r.get("120"),
+        "hr150s": r.get("150"),
+        "hr3m": r.get("180"),
+        "factors": list(a.factors or []),
+        "notes_present": bool(a.notes),
+        "safetyConfirmed": a.safety_confirmed,
+        "safetyConfirmedAt": a.safety_confirmed_at,
+        "bleDeviceName": a.ble_device_name,
+        # Filled in from the profile during processing:
+        "athleteId": None,
+        "athleteName": None,
+        # --- bridge trace (no secrets; the upstream URL is public) ---
+        "upstream_url": AUTHORITATIVE_UPSTREAM_URL,
+        "context_interview_sent": False,
+        "context_interview_status": None,
+        "assessment_sent": False,
+        "assessment_status": None,
+        "replit_http_response": None,
+        "authoritative_result_received": False,
+        "zone": None,
+        "error": None,
+    }
+
+
+async def _save_diag(diag: dict) -> None:
+    """Persist the diagnostic entry. Never raises."""
+    try:
+        await db.diagnostics.insert_one(dict(diag))
+    except Exception as e:
+        logging.warning("diag save failed: %s", e)
+
+
+@api_router.get("/diagnostics/last")
+async def get_last_diagnostics(device_id: str = Query(...), limit: int = Query(5, le=20)):
+    """TEMPORARY developer diagnostics — most recent assessment attempts
+    for this device. Contains no secrets (Bearer token is never stored)."""
+    cur = (
+        db.diagnostics.find({"device_id": device_id}, {"_id": 0})
+        .sort("timestamp", -1)
+        .limit(limit)
+    )
+    return await cur.to_list(length=limit)
+
+
 @api_router.post("/assessments", response_model=Assessment)
 async def create_assessment(a: AssessmentIn):
+    """Thin diagnostic wrapper around the real implementation.
+
+    Captures exactly what the mobile app sent and how each bridge stage
+    responded, persisting the trace even when the request aborts with an
+    HTTPException. Assessment logic itself lives unchanged in
+    ``_create_assessment_impl``."""
+    diag = _new_diag(a)
+    try:
+        return await _create_assessment_impl(a, diag)
+    except HTTPException as e:
+        diag["error"] = e.detail if isinstance(e.detail, dict) else {"message": str(e.detail)}
+        raise
+    finally:
+        await _save_diag(diag)
+
+
+async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
     """Create a new assessment.
 
     Rules (strict):
@@ -909,6 +994,9 @@ async def create_assessment(a: AssessmentIn):
                 ),
             },
         )
+    # Diagnostic trace (no logic impact)
+    diag["athleteId"] = athlete_id_num
+    diag["athleteName"] = profile.get("name") or ""
 
     # 2. factors validation: at least one official key; "none" is exclusive.
     submitted = [str(f).strip() for f in (a.factors or []) if str(f).strip()]
@@ -959,10 +1047,17 @@ async def create_assessment(a: AssessmentIn):
         # STEP 1/2 — Log the contextual interview with Replit BEFORE the
         # assessment call. Any non-2xx status is surfaced as-is; we never
         # continue silently past a context-interview failure.
+        diag["context_interview_sent"] = True
         ci_data, ci_error = await _call_upstream_context_interview(
             athlete_id_num, profile.get("name") or "", submitted, notes_clean
         )
         if ci_error is not None:
+            diag["context_interview_status"] = ci_error.get("upstream_status")
+            diag["replit_http_response"] = {
+                "stage": "context-interview",
+                "status": ci_error.get("upstream_status"),
+                "body": (ci_error.get("upstream_body") or "")[:400],
+            }
             raise HTTPException(
                 status_code=424,
                 detail={
@@ -977,10 +1072,12 @@ async def create_assessment(a: AssessmentIn):
             )
         if ci_data is None:
             # Network-level failure while configured — treat as pending.
+            diag["context_interview_status"] = "NETWORK_FAILURE"
             derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
             calc_source = "pending"
             calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo — entrevista contextual)"
         else:
+            diag["context_interview_status"] = 201
             _cid_raw = (
                 ci_data.get("id")
                 or ci_data.get("interviewId")
@@ -988,8 +1085,15 @@ async def create_assessment(a: AssessmentIn):
             )
             context_interview_id = str(_cid_raw) if _cid_raw is not None else None
             # STEP 2/2 — Now the actual assessment call.
+            diag["assessment_sent"] = True
             derived, error = await _call_upstream(a)
             if error is not None:
+                diag["assessment_status"] = error.get("upstream_status")
+                diag["replit_http_response"] = {
+                    "stage": "assessment",
+                    "status": error.get("upstream_status"),
+                    "body": (error.get("upstream_body") or "")[:400],
+                }
                 raise HTTPException(
                     status_code=424,
                     detail={
@@ -1003,14 +1107,24 @@ async def create_assessment(a: AssessmentIn):
                     },
                 )
             if derived is None:
+                diag["assessment_status"] = "NETWORK_FAILURE"
                 derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
                 calc_source = "pending"
                 calc_notice = PENDING_NOTICE + " (Sin red al servidor autoritativo)"
             else:
+                diag["assessment_status"] = 201
                 derived = {**math, **{k: v for k, v in derived.items() if v is not None}}
                 derived.setdefault("context_flag", False)
                 calc_source = "authoritative"
                 calc_notice = None
+                diag["authoritative_result_received"] = True
+                diag["zone"] = derived.get("zone")
+                diag["replit_http_response"] = {
+                    "stage": "assessment",
+                    "status": 201,
+                    "zone": derived.get("zone"),
+                    "pattern": derived.get("pattern"),
+                }
     else:
         # Upstream not configured → pending (documented behavior).
         derived = {**math, "pattern": None, "zone": None, "action": None, "context_flag": False}
