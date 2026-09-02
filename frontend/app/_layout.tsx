@@ -5,6 +5,7 @@ import { LogBox } from "react-native";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { I18nProvider } from "@/src/lib/i18n";
+import { ensureIOSFreeAccess } from "@/src/lib/billing";
 
 
 // Disable logbox errors etc so that users can see the app
@@ -21,6 +22,13 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded, error]);
+
+  // v1.0 iOS App Store launch: silently ensure the athlete has an
+  // active trial so the app operates as free-access. No-op on Android
+  // and web (guarded inside the helper).
+  useEffect(() => {
+    ensureIOSFreeAccess();
+  }, []);
 
   if (!loaded && !error) return null;
 

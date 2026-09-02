@@ -263,6 +263,14 @@ const dict = {
     // Profile entry
     'profile.subscription.title': 'Manage subscription',
     'profile.subscription.body': 'Plan, renewal and cancellation.',
+    'profile.support.title': 'Contact support',
+    'profile.support.body': 'Reach the WeWon Safety Check team.',
+    'profile.support.hint': 'Opens wewonsss.com in your browser.',
+    'paywall.free.eyebrow': 'FREE ACCESS · v1.0',
+    'paywall.free.title': 'Full access is on us for the App Store launch',
+    'paywall.free.body':
+      'You have full access to every AFEtm Safety Check while we finish the App Store subscription setup. No credit card required, nothing to activate.',
+    'paywall.free.cta': 'Continue to the app',
 
     // Home gate banner
     'home.subscription.gate.title': 'Subscription required',
@@ -886,6 +894,14 @@ const dict = {
 
     'profile.subscription.title': 'Gestionar suscripción',
     'profile.subscription.body': 'Plan, renovación y cancelación.',
+    'profile.support.title': 'Contactar soporte',
+    'profile.support.body': 'Escribe al equipo de WeWon Safety Check.',
+    'profile.support.hint': 'Abre wewonsss.com en tu navegador.',
+    'paywall.free.eyebrow': 'ACCESO GRATIS · v1.0',
+    'paywall.free.title': 'Acceso completo por cuenta de la casa durante el lanzamiento',
+    'paywall.free.body':
+      'Tienes acceso completo a todos los AFEtm Safety Check mientras terminamos la configuración de suscripción de la App Store. No se requiere tarjeta ni activación.',
+    'paywall.free.cta': 'Continuar a la app',
 
     'home.subscription.gate.title': 'Se requiere suscripción',
     'home.subscription.gate.body':

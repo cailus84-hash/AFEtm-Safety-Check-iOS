@@ -6,11 +6,13 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Profile, fetchProfile, getDeviceId } from '@/src/lib/api';
+import { IOS_PAYWALL_ENABLED } from '@/src/lib/billing';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n, Lang } from '@/src/lib/i18n';
 
@@ -137,22 +139,50 @@ export default function ProfileTab() {
             />
           </Pressable>
 
-          {/* Manage subscription (native store — App Store / Google Play) */}
+          {/* Manage subscription (native store — App Store / Google Play).
+              Hidden on iOS v1.0 while the paywall stays mocked. */}
+          {IOS_PAYWALL_ENABLED && (
+            <Pressable
+              testID="profile-subscription-btn"
+              style={[styles.editBtn, { marginTop: spacing.md, justifyContent: 'flex-start' }]}
+              onPress={() => router.push('/manage-subscription')}
+            >
+              <MaterialCommunityIcons name="crown-outline" size={18} color={colors.brandGold} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.editBtnText, { color: colors.onSurface }]}>
+                  {t('profile.subscription.title')}
+                </Text>
+                <Text style={styles.tourHint}>{t('profile.subscription.body')}</Text>
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color={colors.onSurfaceTertiary}
+              />
+            </Pressable>
+          )}
+
+          {/* Support link — opens the WeWon Safety Check support site.
+              Present on every platform to satisfy Apple Guideline 1.5. */}
           <Pressable
-            testID="profile-subscription-btn"
+            testID="profile-support-btn"
             style={[styles.editBtn, { marginTop: spacing.md, justifyContent: 'flex-start' }]}
-            onPress={() => router.push('/manage-subscription')}
+            onPress={() =>
+              Linking.openURL('https://www.wewonsss.com/contact').catch(() =>
+                Linking.openURL('https://www.wewonsss.com').catch(() => {}),
+              )
+            }
           >
-            <MaterialCommunityIcons name="crown-outline" size={18} color={colors.brandGold} />
+            <MaterialCommunityIcons name="lifebuoy" size={18} color={colors.zoneBlue} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.editBtnText, { color: colors.onSurface }]}>
-                {t('profile.subscription.title')}
+                {t('profile.support.title')}
               </Text>
-              <Text style={styles.tourHint}>{t('profile.subscription.body')}</Text>
+              <Text style={styles.tourHint}>{t('profile.support.body')}</Text>
             </View>
             <MaterialCommunityIcons
-              name="chevron-right"
-              size={18}
+              name="open-in-new"
+              size={16}
               color={colors.onSurfaceTertiary}
             />
           </Pressable>

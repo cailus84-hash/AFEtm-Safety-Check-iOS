@@ -20,7 +20,23 @@
  * `/api/subscription` (backend-owned mirror), never inferred locally.
  */
 
-import { req } from './api';
+import { Platform } from 'react-native';
+import { req, getDeviceId } from './api';
+
+/**
+ * IOS_PAYWALL_ENABLED — feature flag for the v1.0 App Store launch.
+ *
+ * While we complete the real StoreKit integration (Apple IAP Product IDs
+ * pending), the iOS build must NOT display any priced subscription
+ * tile, Restore Purchases button, or Manage Subscription entry. The
+ * user experiences the app as free access. This flag intentionally
+ * lives in this module so every call site can read a single source of
+ * truth without hunting for Platform.OS branches.
+ *
+ * Android and web keep the full paywall UX intact until the same
+ * migration path is completed for Google Play Billing.
+ */
+export const IOS_PAYWALL_ENABLED = Platform.OS !== 'ios';
 
 export const BILLING = {
   freeTrialDays: 30,
@@ -154,4 +170,29 @@ export function daysUntilExpiry(sub: Subscription | null | undefined): number {
   if (!sub?.expires_at) return 0;
   const ms = new Date(sub.expires_at).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / 86400000));
+}
+
+/**
+ * v1.0 iOS App Store launch — free-access guarantee.
+ *
+ * The iOS build MUST NOT expose any priced subscription tile or mocked
+ * purchase button. To keep the backend gate happy while the paywall is
+ * hidden, we silently ensure a trial is active on iOS the first time
+ * the app opens. Idempotent: if a trial (or any active state) already
+ * exists we no-op. Never throws — a failure here should not block the
+ * UI, the backend gate simply stays as-is.
+ */
+export async function ensureIOSFreeAccess(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  try {
+    const id = await getDeviceId();
+    const sub = await fetchSubscription(id);
+    if (hasActiveAccess(sub)) return;
+    // TRIAL_ALREADY_USED (409) is fine — nothing more we can do
+    // silently. The user's app stays reachable because Emergent
+    // treats an expired trial identically until we ship real IAP.
+    await startFreeTrial(id).catch(() => undefined);
+  } catch {
+    // Network / auth transient failure — retry next launch.
+  }
 }

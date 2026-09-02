@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n } from '@/src/lib/i18n';
 import { getDeviceId } from '@/src/lib/api';
-import { fetchSubscription, hasActiveAccess } from '@/src/lib/billing';
+import { fetchSubscription, hasActiveAccess, ensureIOSFreeAccess, IOS_PAYWALL_ENABLED } from '@/src/lib/billing';
 
 export default function NewChoice() {
   const router = useRouter();
@@ -19,9 +19,15 @@ export default function NewChoice() {
         try {
           const id = await getDeviceId();
           const sub = await fetchSubscription(id);
-          if (!hasActiveAccess(sub)) {
+          if (hasActiveAccess(sub)) return;
+          if (IOS_PAYWALL_ENABLED) {
+            // Android / web: keep the priced paywall flow.
             router.replace('/paywall');
+            return;
           }
+          // iOS v1.0: paywall is hidden. Silently ensure trial → stay
+          // on this screen so the athlete can pick a mode right away.
+          await ensureIOSFreeAccess();
         } catch {}
       })();
     }, [router])

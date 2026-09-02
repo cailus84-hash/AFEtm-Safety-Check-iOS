@@ -16,6 +16,7 @@ import { useI18n } from '@/src/lib/i18n';
 import { getDeviceId } from '@/src/lib/api';
 import {
   BILLING,
+  IOS_PAYWALL_ENABLED,
   purchaseMonthly,
   purchaseYearly,
   restorePurchases,
@@ -118,6 +119,37 @@ export default function Paywall() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* v1.0 iOS App Store launch: the mocked paywall is hidden.
+              We keep the code intact and simply render an informational
+              "free access" card so any route that still points here
+              lands gracefully. Zero purchase buttons, zero pricing. */}
+          {!IOS_PAYWALL_ENABLED ? (
+            <View style={styles.freeAccessCard} testID="paywall-ios-free-access">
+              <View style={styles.heroBadge}>
+                <MaterialCommunityIcons name="gift-outline" size={11} color="#000" />
+                <Text style={styles.heroBadgeText}>{t('paywall.free.eyebrow')}</Text>
+              </View>
+              <Text style={styles.title} testID="paywall-free-title">
+                {t('paywall.free.title')}
+              </Text>
+              <Text style={[styles.subtitle, { marginTop: spacing.sm }]}>
+                {t('paywall.free.body')}
+              </Text>
+              <Pressable
+                testID="paywall-free-continue"
+                onPress={() => router.replace('/(tabs)')}
+                style={({ pressed }) => [
+                  styles.heroBtn,
+                  { marginTop: spacing.lg },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <MaterialCommunityIcons name="arrow-right-circle-outline" size={16} color="#000" />
+                <Text style={styles.heroBtnText}>{t('paywall.free.cta')}</Text>
+              </Pressable>
+            </View>
+          ) : (
+          <>
           <View style={styles.trialBadge}>
             <MaterialCommunityIcons name="gift-outline" size={12} color="#000" />
             <Text style={styles.trialBadgeText}>{t('paywall.trialBadge')}</Text>
@@ -295,6 +327,8 @@ export default function Paywall() {
             <Text style={styles.legalText}>{t('paywall.legal.tool')}</Text>
             <Text style={styles.legalText}>{t('paywall.legal.renew')}</Text>
           </View>
+          </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -510,4 +544,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   legalText: { color: colors.onSurfaceTertiary, fontSize: 11, lineHeight: 16 },
+  freeAccessCard: {
+    marginTop: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    borderWidth: 1.5, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+    shadowColor: colors.brandGold, shadowOpacity: 0.35, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 }, elevation: 6,
+  },
 });

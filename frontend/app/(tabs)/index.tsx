@@ -23,8 +23,10 @@ import {
 import {
   Subscription,
   daysUntilExpiry,
+  ensureIOSFreeAccess,
   fetchSubscription,
   hasActiveAccess,
+  IOS_PAYWALL_ENABLED,
 } from '@/src/lib/billing';
 import { TrendSparkline } from '@/src/components/TrendSparkline';
 import { ColorGuideCard } from '@/src/components/ColorGuideCard';
@@ -248,8 +250,9 @@ export default function Home() {
           </View>
         ) : (
           <>
-            {/* Subscription pill (trial countdown or active plan) */}
-            {subscription && hasActiveAccess(subscription) && (
+            {/* Subscription pill (trial countdown or active plan).
+                Hidden on iOS v1.0 (free-access mode). */}
+            {IOS_PAYWALL_ENABLED && subscription && hasActiveAccess(subscription) && (
               <Pressable
                 testID="home-subscription-pill"
                 onPress={() => router.push('/manage-subscription')}
@@ -274,8 +277,10 @@ export default function Home() {
               </Pressable>
             )}
 
-            {/* Subscription gate banner — visible when no active access */}
-            {subscription && !hasActiveAccess(subscription) && (
+            {/* Subscription gate banner — visible when no active access.
+                Hidden on iOS v1.0 (free-access mode) since we render no
+                paywall or Manage Subscription entries on iOS. */}
+            {IOS_PAYWALL_ENABLED && subscription && !hasActiveAccess(subscription) && (
               <View style={styles.gateCard} testID="home-subscription-gate">
                 <View style={styles.gateHeader}>
                   <View style={styles.gateIcon}>
@@ -463,8 +468,15 @@ export default function Home() {
           onPress={() => {
             // If the athlete doesn't have access, send them to the paywall
             // instead of the assessment flow. Backend also enforces this.
+            // On iOS v1.0 the paywall is hidden — free access is granted
+            // silently via ensureIOSFreeAccess() so we route straight to
+            // the assessment picker.
             if (subscription && !hasActiveAccess(subscription)) {
-              router.push('/paywall');
+              if (IOS_PAYWALL_ENABLED) {
+                router.push('/paywall');
+                return;
+              }
+              ensureIOSFreeAccess().finally(() => router.push('/(tabs)/new'));
               return;
             }
             router.push('/(tabs)/new');

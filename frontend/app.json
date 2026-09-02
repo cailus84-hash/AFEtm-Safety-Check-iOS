@@ -13,7 +13,16 @@
       "bundleIdentifier": "com.emergent.safetycheckmvp.oxtyov",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Connect to your heart-rate monitor for the AFEtm Safety Check.",
-        "NSBluetoothPeripheralUsageDescription": "Connect to your heart-rate monitor for the AFEtm Safety Check."
+        "NSBluetoothPeripheralUsageDescription": "Connect to your heart-rate monitor for the AFEtm Safety Check.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
       }
     },
     "android": {
