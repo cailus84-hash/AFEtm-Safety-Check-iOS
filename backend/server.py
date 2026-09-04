@@ -359,6 +359,48 @@ async def upsert_profile(p: ProfileIn):
     return Profile(**doc)
 
 
+def _profile_from_doc(doc: dict) -> Profile:
+    """Defensive Profile serialization.
+
+    Production data can contain LEGACY profile documents created by
+    older deploys (e.g. terms-acceptance stubs that lacked name/age/
+    weight/sport). Feeding those raw into ``Profile(**doc)`` raises a
+    ValidationError → FastAPI 500 "Internal Server Error" — which is
+    exactly what broke the "ACEPTAR Y CONTINUAR" button. This helper
+    coerces/defaults every field so any historical doc serializes.
+    """
+    def _i(v, d=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return d
+
+    def _f(v, d=0.0):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return d
+
+    aid = doc.get("athlete_id")
+    try:
+        aid = int(aid) if aid is not None else None
+    except (TypeError, ValueError):
+        aid = None
+    now = datetime.now(timezone.utc).isoformat()
+    return Profile(
+        device_id=str(doc.get("device_id") or ""),
+        name=str(doc.get("name") or ""),
+        age=_i(doc.get("age")),
+        weight=_f(doc.get("weight")),
+        sport=str(doc.get("sport") or ""),
+        target_zone=doc.get("target_zone") if doc.get("target_zone") in ("BLUE", "GREEN") else None,
+        athlete_id=aid,
+        terms_accepted_at=doc.get("terms_accepted_at"),
+        terms_version=str(doc["terms_version"]) if doc.get("terms_version") is not None else None,
+        updated_at=str(doc.get("updated_at") or now),
+    )
+
+
 @api_router.post("/profile/accept-terms", response_model=Profile)
 async def accept_terms(payload: AcceptTermsIn):
     """Record acceptance of the AFEtm Mobile Personal-Use Terms.
@@ -371,6 +413,10 @@ async def accept_terms(payload: AcceptTermsIn):
     happen BEFORE the profile setup step in onboarding. We create a stub
     profile row (name empty, age/weight 0) whose `terms_accepted_at` is set,
     and later /profile POST enriches it with the athlete data.
+
+    SELF-HEALING: legacy stub docs (older deploys) may lack the required
+    profile fields; we backfill safe defaults during acceptance so the doc
+    validates against the current schema forever after.
     """
     now = datetime.now(timezone.utc).isoformat()
     version = payload.version or TERMS_VERSION
@@ -381,9 +427,14 @@ async def accept_terms(payload: AcceptTermsIn):
             "terms_version": version,
             "updated_at": now,
         }
+        # Heal legacy docs: backfill any missing/None required field with a
+        # neutral default so current-schema validation never breaks again.
+        for k, dflt in (("name", ""), ("sport", ""), ("age", 0), ("weight", 0.0)):
+            if existing.get(k) is None:
+                update[k] = dflt
         await db.profiles.update_one({"device_id": payload.device_id}, {"$set": update})
         existing.update(update)
-        return Profile(**existing)
+        return _profile_from_doc(existing)
     # Create a stub row so subsequent gating can rely on the profile
     # existing. The client MUST still complete profile setup afterwards.
     doc = {
@@ -405,7 +456,11 @@ async def accept_terms(payload: AcceptTermsIn):
 @api_router.get("/profile", response_model=Optional[Profile])
 async def get_profile(device_id: str = Query(...)):
     doc = await db.profiles.find_one({"device_id": device_id}, {"_id": 0})
-    return doc
+    if not doc:
+        return None
+    # Defensive serialization — legacy docs must never 500 (a 500 here made
+    # the mobile client treat the athlete as "no profile" and re-show Terms).
+    return _profile_from_doc(doc)
 
 
 # ------------------------- SUBSCRIPTION ROUTES -----------------------------
