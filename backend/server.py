@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import httpx
@@ -26,17 +26,33 @@ db = client[os.environ['DB_NAME']]
 # "Resultado pendiente de sincronización con el motor oficial AFEtm." — we
 # never generate a local Blue/Green/Yellow/Red zone.
 def _clean_env(name: str) -> str:
-    """Read an env var defensively for deployed environments.
+    """Resolve the AFEtm service credentials with the repo `.env` file as
+    the SINGLE SOURCE OF TRUTH.
 
-    Trims whitespace and strips ONE layer of matching surrounding
-    quotes. Rationale: `load_dotenv()` strips quotes in the dev pod,
-    but deployment platforms can inject `.env` values verbatim —
-    INCLUDING the quote characters — which silently corrupts the
-    Bearer header (`Authorization: Bearer "xxx"`) and makes the
-    authoritative Replit server answer 401 Unauthorized only in
-    production. This helper makes the token immune to either style.
+    Why: deployment platforms can keep their own environment-variable
+    store that persists across redeploys. If that store holds a stale
+    AFETM service secret, it is injected into the process env and —
+    because `load_dotenv()` never overrides pre-existing variables —
+    silently wins over the correct value in `backend/.env`, producing
+    401 Unauthorized from the authoritative Replit server ONLY in
+    production. Reading the file first guarantees the deployed process
+    always uses the same token that was verified in development.
+
+    Also trims whitespace/newlines and strips one layer of matching
+    surrounding quotes, so the Bearer header can never be corrupted by
+    quoting styles.
+
+    NOTE: intentionally NOT applied to MONGO_URL/DB_NAME — those MUST
+    keep honoring the platform-injected production values.
     """
-    v = (os.environ.get(name) or '').strip()
+    v = None
+    try:
+        v = dotenv_values(ROOT_DIR / '.env').get(name)
+    except Exception:
+        v = None
+    if not v:
+        v = os.environ.get(name) or ''
+    v = v.strip()
     if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
         v = v[1:-1].strip()
     return v
