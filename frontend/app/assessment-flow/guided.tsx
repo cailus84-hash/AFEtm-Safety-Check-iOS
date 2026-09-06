@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
+import { useProtocolAudio } from '@/src/hooks/useProtocolAudio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAPTURE_TIMES, RECOVERY_DURATION } from '@/src/hr/acquisition';
 import { preserveObservation } from '@/src/hr/observation';
@@ -59,6 +60,7 @@ export default function Guided() {
   const router = useRouter();
   const { t } = useI18n();
   const hr = useHeartRateMonitor();
+  const { cue, unavailable: audioUnavailable } = useProtocolAudio();
   const [phase, setPhase] = useState<Phase>('scan');
   const [profile, setProfile] = useState<{ age: number; athleteId: number | null } | null>(null);
   const [deviceId, setDeviceId] = useState('');
@@ -125,19 +127,29 @@ export default function Guided() {
     // FCr = average of last 15s of readings (rest)
     const avg = hr.acquisition?.registerResting();
     if (!avg || avg < 30 || avg > 130) {
+      cue('warning');
       setErrorMsg(t('guided.fcr.error'));
       return;
     }
     setFcr(avg);
     setErrorMsg(null);
     setPhase('fcp');
-  }, [hr, t]);
+    cue('rest', `${hr.acquisition?.id}:rest`);
+  }, [hr, t, cue]);
 
   const markPeakAndStart = useCallback(() => {
     const session = hr.acquisition;
+    // Automatic transition and a concurrent button event cannot start twice.
+    if (session && session.status !== 'collecting') return;
     const measured = session?.freshSample()?.bpm;
+    if (session && measured !== undefined && fcpTarget > 0 && measured >= fcpTarget) {
+      cue('target', `${session.id}:target`);
+    }
+    // Schedule the cue, then immediately let the unchanged controller validate
+    // eligibility and capture t=0. Never await audio or use it as a clock.
     const result = session?.startRecovery(fcpTarget);
     if (result === 'observation' && session && measured !== undefined) {
+      cue('warning', `${session.id}:terminal-warning`);
       setPhase('observation');
       setErrorMsg(null);
       void preserveObservation(AsyncStorage, {
@@ -154,6 +166,7 @@ export default function Guided() {
       return;
     }
     if (result !== 'started' || !session) {
+      cue('warning', `${session?.id}:terminal-warning`);
       setErrorMsg(t('guided.incomplete.body'));
       setPhase('incomplete');
       void hr.disconnect();
@@ -164,7 +177,20 @@ export default function Guided() {
     setErrorMsg(null);
     setElapsed(0);
     setPhase('recovery');
-  }, [hr, fcpTarget, t]);
+    cue('start', `${session.id}:start`);
+  }, [hr, fcpTarget, t, cue]);
+
+  useEffect(() => {
+    if (phase !== 'fcp') return;
+    const measured = hr.acquisition?.freshSample()?.bpm;
+    if (measured !== undefined && fcpTarget > 0 && measured >= fcpTarget) markPeakAndStart();
+  }, [phase, hr.hr, hr.acquisition, fcpTarget, markPeakAndStart]);
+
+  useEffect(() => {
+    if (['observation', 'incomplete', 'error'].includes(phase)) {
+      cue('warning', `${hr.acquisition?.id}:terminal-warning`);
+    }
+  }, [phase, hr.acquisition, cue]);
 
   // Recovery timer + auto-captures
   useEffect(() => {
@@ -184,6 +210,14 @@ export default function Guided() {
       session.advance();
       setElapsed(session.elapsed);
       setCaptured({ ...session.captured });
+      // Cues follow confirmed immutable captures, never the elapsed timer alone.
+      if (session.status === 'recovery' || session.status === 'complete') {
+        for (const checkpoint of CAPTURE_TIMES) {
+          if (session.captured[String(checkpoint)] !== undefined) {
+            cue(checkpoint === 180 ? 'complete' : 'checkpoint', `${session.id}:checkpoint:${checkpoint}`);
+          }
+        }
+      }
       if (session.status === 'incomplete') {
         setErrorMsg(t('guided.incomplete.body'));
         setPhase('incomplete');
@@ -197,7 +231,7 @@ export default function Guided() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [phase, hr.acquisition, hr.disconnect, t]);
+  }, [phase, hr.acquisition, hr.disconnect, t, cue]);
 
   // A disconnect before target, during recovery, or before submission is terminal.
   useEffect(() => {
@@ -324,6 +358,11 @@ export default function Guided() {
         <LiveHrCard hrValue={hr.hr} pulseAnim={pulse} status={hr.status} phase={phase} elapsed={elapsed} t={t} />
 
         {/* Phase-specific body */}
+        {audioUnavailable && (
+          <Text style={[shared.muted, { marginTop: spacing.sm }]} accessibilityLiveRegion="polite">
+            {t('guided.audio.unavailable')}
+          </Text>
+        )}
         {phase === 'scan' && (
           <ScanPhase hr={hr} onSelect={(id) => { setPhase('connect'); hr.connect(id); }} t={t} />
         )}
@@ -331,13 +370,13 @@ export default function Guided() {
           <InfoBlock icon="progress-clock" title={t('guided.connecting.title')} text={t('guided.connecting.body')} />
         )}
         {hr.status === 'connected' && (phase === 'connect' || phase === 'scan') && (
-          <ReadyPrompt onStart={() => setPhase('fcr')} t={t} />
+          <ReadyPrompt onStart={() => { cue('click'); setPhase('fcr'); }} t={t} />
         )}
         {phase === 'fcr' && (
           <FcrPhase hrValue={hr.hr} onRegister={registerFcr} t={t} />
         )}
         {phase === 'fcp' && (
-          <FcpPhase fcpTarget={fcpTarget} hrValue={hr.hr} fcr={fcr!} onStart={markPeakAndStart} t={t} />
+          <FcpPhase fcpTarget={fcpTarget} hrValue={hr.hr} fcr={fcr!} onStart={() => { cue('click'); markPeakAndStart(); }} t={t} />
         )}
         {phase === 'recovery' && (
           <>
@@ -354,6 +393,12 @@ export default function Guided() {
         )}
         {phase === 'factors' && (
           <View style={[shared.card, { marginTop: spacing.xl }]} testID="guided-factors-phase">
+            {captured['180'] !== undefined && (
+              <Text style={[shared.h3, { color: colors.brandGold, marginBottom: spacing.lg }]}
+                accessibilityLiveRegion="polite" testID="guided-recovery-complete">
+                {t('guided.recovery.complete')}
+              </Text>
+            )}
             <Text style={shared.h3}>{t('assess.context.title')}</Text>
             <Text style={[shared.body, { marginTop: spacing.sm }]}>
               {t('assess.context.body')}
@@ -429,7 +474,7 @@ export default function Guided() {
             <Pressable
               testID="guided-factors-submit"
               disabled={!factors.length || !(profile?.athleteId && profile.athleteId > 0)}
-              onPress={() => setPhase('submit')}
+              onPress={() => { cue('click'); setPhase('submit'); }}
               style={({ pressed }) => [
                 shared.primaryBtn,
                 { marginTop: spacing.lg },
@@ -666,6 +711,7 @@ function FcpPhase({ fcpTarget, hrValue, fcr, onStart, t }: {
   fcpTarget: number; hrValue: number | null; fcr: number; onStart: () => void; t: any;
 }) {
   const reached = !!hrValue && hrValue >= fcpTarget;
+  const progress = hrValue !== null && fcpTarget > 0 ? Math.max(0, Math.min(1, hrValue / fcpTarget)) : 0;
   return (
     <View style={[shared.card, { marginTop: spacing.xl }]} testID="phase-fcp">
       <Text style={shared.h3}>{t('guided.fcp.title')}</Text>
@@ -675,13 +721,22 @@ function FcpPhase({ fcpTarget, hrValue, fcr, onStart, t }: {
         <FcpBadge label={t('guided.fcp.target')} value={`${fcpTarget}`} color={colors.brandGold} />
         <FcpBadge label={t('guided.fcp.live')} value={hrValue ? `${hrValue}` : '—'} color={reached ? colors.zoneGreen : colors.onSurface} />
       </View>
+      <View style={[styles.progressWrap, { marginTop: spacing.md }]}
+        accessibilityRole="progressbar" accessibilityLabel={t('guided.fcp.target')}
+        accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+      </View>
+      <Text style={[shared.muted, { marginTop: spacing.sm }]}>{Math.round(progress * 100)}%</Text>
+      <Text style={[shared.body, { marginTop: spacing.md }]} accessibilityLiveRegion="polite">
+        {t(reached ? 'guided.fcp.reached' : 'guided.fcp.required')}
+      </Text>
       <Pressable
         testID="guided-start-recovery"
-        style={[shared.primaryBtn, { marginTop: spacing.md, opacity: hrValue ? 1 : 0.5 }]}
+        style={[styles.rescan, { marginTop: spacing.lg, opacity: hrValue && !reached ? 1 : 0.5 }]}
         onPress={onStart}
-        disabled={!hrValue}
+        disabled={!hrValue || reached}
       >
-        <Text style={shared.primaryBtnText}>{t('guided.fcp.start')}</Text>
+        <Text style={styles.rescanText}>{t('guided.fcp.end')}</Text>
       </Pressable>
     </View>
   );
@@ -702,6 +757,11 @@ function RecoveryPhase({ elapsed, captured, hrPeak, fcr, t }: {
   const progress = Math.min(1, elapsed / RECOVERY_DURATION);
   return (
     <View style={{ marginTop: spacing.xl }} testID="phase-recovery">
+      <Text style={[shared.h3, { color: colors.brandGold, marginBottom: spacing.sm }]}
+        accessibilityLiveRegion="polite">{t('guided.fcp.reached')}</Text>
+      <Text style={[shared.body, { marginBottom: spacing.lg }]} accessibilityLiveRegion="polite">
+        {t('guided.recovery.started')}
+      </Text>
       <View style={styles.progressWrap}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>

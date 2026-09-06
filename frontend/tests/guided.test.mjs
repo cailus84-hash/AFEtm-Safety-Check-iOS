@@ -15,6 +15,12 @@ async function screenFixture() {
   sensor.emit('state', { status: 'connected', id: 'sensor-a', name: 'Verity Sense' });
   let cursor = 0;
   const slots = [], effects = [], timers = new Set(), requests = [], navigation = [];
+  const sounds = [], heard = new Set();
+  const audio = { unavailable: false, cue(name, key) {
+    if (key && heard.has(key)) return;
+    if (key) heard.add(key);
+    sounds.push(name);
+  } };
   let stored = null;
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const hooks = {
@@ -51,6 +57,7 @@ async function screenFixture() {
   source += '\nreturn { phase, fcpTarget, registerFcr, markPeakAndStart, setPhase, setFactors };\n}\n';
   const Guided = vm.runInNewContext(`(() => { ${stripTypeScriptTypes(source)}; return Guided; })()`, {
     ...hooks, useHeartRateMonitor: sensor.render, useRouter: () => router, useI18n: () => i18n,
+    useProtocolAudio: () => audio,
     CAPTURE_TIMES, RECOVERY_DURATION, preserveObservation,
     getDeviceId: async () => 'installation-id',
     fetchProfile: async () => ({ age: 40, athlete_id: 7 }),
@@ -78,7 +85,7 @@ async function screenFixture() {
   render(); await flush();
   sample(0, 60);
   render().setPhase('fcr'); render().registerFcr(); render();
-  return { render, flush, sample, tick, sensor, requests, navigation, stored: () => stored,
+  return { render, flush, sample, tick, sensor, requests, navigation, sounds, audio, stored: () => stored,
     close() { for (const slot of slots) slot?.cleanup?.(); sensor.unmount(); } };
 }
 
@@ -157,5 +164,126 @@ test('guided delayed timer preserves the original windows', async () => {
   f.render().setPhase('submit'); await f.flush();
   assert.equal(f.requests.length, 1);
   assert.equal(f.requests[0].readings['180'], 120);
+  f.close();
+});
+
+test('guided confirms resting capture once and enters Increase Heart Rate', async () => {
+  const f = await screenFixture();
+  assert.equal(f.render().phase, 'fcp');
+  assert.deepEqual(f.sounds, ['rest']);
+  await f.flush();
+  assert.deepEqual(f.sounds, ['rest']);
+  f.close();
+});
+
+test('target cue is scheduled before immediate startRecovery; audio promises are never awaited', async () => {
+  const f = await screenFixture();
+  const order = [];
+  const session = f.sensor.render().acquisition;
+  const original = session.startRecovery.bind(session);
+  session.startRecovery = target => { order.push('startRecovery'); return original(target); };
+  f.audio.cue = name => { order.push(name); return new Promise(() => {}); };
+  f.sample(20_000, 144);
+  assert.equal(f.render().phase, 'recovery');
+  assert.deepEqual(order, ['target', 'startRecovery', 'start']);
+  assert.equal(session.elapsed, 0);
+  f.close();
+});
+
+for (const bpm of [144, 145]) {
+  test(`guided automatically starts existing recovery logic at measured HR ${bpm}, once`, async () => {
+    const f = await screenFixture();
+    f.sample(20_000, bpm);
+    assert.equal(f.render().phase, 'recovery');
+    const session = f.sensor.render().acquisition;
+    assert.equal(session.captured['0'], bpm);
+    assert.equal(session.elapsed, 0);
+    assert.deepEqual(f.sounds, ['rest', 'target', 'start']);
+    f.render().markPeakAndStart();
+    await f.flush();
+    assert.equal(session.status, 'recovery');
+    assert.deepEqual(f.sounds, ['rest', 'target', 'start']);
+    f.close();
+  });
+}
+
+test('guided does not cue success or start recovery below target; ended attempt warns once', async () => {
+  const f = await screenFixture();
+  f.sample(20_000, 143);
+  assert.equal(f.render().phase, 'fcp');
+  assert.deepEqual(f.sounds, ['rest']);
+  f.render().markPeakAndStart();
+  await f.flush();
+  assert.equal(f.render().phase, 'observation');
+  assert.deepEqual(f.sounds, ['rest', 'warning']);
+  assert.equal(f.requests.length, 0);
+  f.close();
+});
+
+test('guided ignores stale and foreign target readings for automatic transition', async () => {
+  const f = await screenFixture();
+  f.sensor.tick(20_000);
+  f.sensor.emitRaw('hr', { ...f.sensor.context(), id: 'sensor-a', hr: 150, receivedAt: 14_000 });
+  f.sensor.emitRaw('hr', { ...f.sensor.context(), id: 'sensor-b', hr: 150, receivedAt: 20_000 });
+  await f.flush();
+  assert.equal(f.render().phase, 'fcp');
+  assert.deepEqual(f.sounds, ['rest']);
+  f.close();
+});
+
+test('guided cues only confirmed checkpoints and completes with one distinct HR180 cue', async () => {
+  const f = await screenFixture();
+  f.sample(20_000, 144);
+  f.render();
+  for (const checkpoint of CAPTURE_TIMES) {
+    f.sample(20_000 + checkpoint * 1000 - 1, 120);
+    f.tick();
+    assert.equal(f.sounds.filter(s => s === 'checkpoint').length, CAPTURE_TIMES.indexOf(checkpoint));
+    f.sample(20_000 + checkpoint * 1000, 120);
+    f.tick();
+    f.tick();
+  }
+  assert.equal(f.render().phase, 'factors');
+  assert.deepEqual(f.sounds, ['rest', 'target', 'start', 'checkpoint', 'checkpoint', 'checkpoint', 'checkpoint', 'complete']);
+  assert.equal(f.requests.length, 0, 'completion cue must not auto-submit contextual factors');
+  f.close();
+});
+
+test('guided missing checkpoint warns without a checkpoint or completion cue', async () => {
+  const f = await screenFixture();
+  f.sample(20_000, 144);
+  f.render();
+  f.sample(80_001, 110);
+  f.tick(); await f.flush();
+  assert.equal(f.render().phase, 'incomplete');
+  assert.deepEqual(f.sounds, ['rest', 'target', 'start', 'warning']);
+  assert.equal(f.requests.length, 0);
+  f.close();
+});
+
+test('guided disconnect warns once and suppresses further progress cues', async () => {
+  const f = await screenFixture();
+  f.sample(20_000, 144);
+  f.render();
+  f.sensor.emit('state', { status: 'disconnected', id: 'sensor-a' });
+  await f.flush();
+  f.sample(80_000, 120); f.tick(); await f.flush();
+  assert.equal(f.render().phase, 'incomplete');
+  assert.deepEqual(f.sounds, ['rest', 'target', 'start', 'warning']);
+  f.close();
+});
+
+test('unavailable audio never blocks the acquisition or changes the valid payload', async () => {
+  const f = await screenFixture();
+  f.audio.unavailable = true;
+  f.audio.cue = () => {};
+  f.sample(20_000, 144); f.render();
+  for (const t of CAPTURE_TIMES) { f.sample(20_000 + t * 1000, 120); f.tick(); }
+  assert.equal(f.render().phase, 'factors');
+  f.render().setFactors(['none']); f.render();
+  f.render().setPhase('submit'); await f.flush();
+  assert.equal(f.requests.length, 1);
+  assert.deepEqual(f.requests[0].readings, { 0: 144, 60: 120, 90: 120, 120: 120, 150: 120, 180: 120 });
+  assert.equal('audio' in f.requests[0], false);
   f.close();
 });
