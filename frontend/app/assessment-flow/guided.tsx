@@ -15,6 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CAPTURE_TIMES, RECOVERY_DURATION } from '@/src/hr/acquisition';
+import { preserveObservation } from '@/src/hr/observation';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import {
   createAssessment,
@@ -26,12 +29,6 @@ import {
   type ContextFactor,
 } from '@/src/lib/api';
 import { useI18n } from '@/src/lib/i18n';
-
-// Capture windows (seconds elapsed since t=0 of recovery)
-// Each window averages the readings during the LAST 5s of the segment
-// to reduce sensor noise. Also record t=0 as HR_peak.
-const CAPTURE_TIMES = [60, 90, 120, 150, 180] as const;
-const RECOVERY_DURATION = 180; // s
 
 // Icon map for the AFEtm contextual factor toggle buttons.
 const FACTOR_ICONS: Record<ContextFactor, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -54,6 +51,8 @@ type Phase =
   | 'recovery'
   | 'factors'
   | 'submit'
+  | 'observation'
+  | 'incomplete'
   | 'error';
 
 export default function Guided() {
@@ -73,12 +72,12 @@ export default function Guided() {
 
   const pulse = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<any>(null);
-  const capturedRef = useRef<Record<string, number>>({});
-  const hrPeakRef = useRef<number | null>(null);
-
-  // Keep refs in sync so the recovery interval sees fresh values
-  useEffect(() => { capturedRef.current = captured; }, [captured]);
-  useEffect(() => { hrPeakRef.current = hrPeak; }, [hrPeak]);
+  const submittedRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const toggleFactor = (f: ContextFactor) => {
     setFactors((prev) => {
@@ -124,7 +123,7 @@ export default function Guided() {
   // ---------------- Phase actions ----------------
   const registerFcr = useCallback(() => {
     // FCr = average of last 15s of readings (rest)
-    const avg = hr.averageLastMs(15_000);
+    const avg = hr.acquisition?.registerResting();
     if (!avg || avg < 30 || avg > 130) {
       setErrorMsg(t('guided.fcr.error'));
       return;
@@ -132,20 +131,40 @@ export default function Guided() {
     setFcr(avg);
     setErrorMsg(null);
     setPhase('fcp');
-  }, [hr]);
+  }, [hr, t]);
 
   const markPeakAndStart = useCallback(() => {
-    const current = hr.hr;
-    if (!current || current < fcpTarget - 15) {
-      setErrorMsg(t('guided.fcp.error', { n: fcpTarget - 15 }));
+    const session = hr.acquisition;
+    const measured = session?.freshSample()?.bpm;
+    const result = session?.startRecovery(fcpTarget);
+    if (result === 'observation' && session && measured !== undefined) {
+      setPhase('observation');
+      setErrorMsg(null);
+      void preserveObservation(AsyncStorage, {
+        session_id: session.id,
+        sensor_id: session.deviceId,
+        timestamp: new Date().toISOString(),
+        status: 'Observation / Target HR Not Reached',
+        target_hr: fcpTarget,
+        measured_hr: measured,
+      }).catch(() => {
+        if (mountedRef.current) setErrorMsg(t('guided.observation.unsaved'));
+      });
+      void hr.disconnect();
       return;
     }
-    setHrPeak(current);
-    setCaptured({ '0': current });
+    if (result !== 'started' || !session) {
+      setErrorMsg(t('guided.incomplete.body'));
+      setPhase('incomplete');
+      void hr.disconnect();
+      return;
+    }
+    setHrPeak(session.captured['0']);
+    setCaptured({ ...session.captured });
     setErrorMsg(null);
     setElapsed(0);
     setPhase('recovery');
-  }, [hr.hr, fcpTarget]);
+  }, [hr, fcpTarget, t]);
 
   // Recovery timer + auto-captures
   useEffect(() => {
@@ -156,49 +175,44 @@ export default function Guided() {
       }
       return;
     }
-    const startTs = Date.now();
+    const session = hr.acquisition;
+    if (!session) {
+      setPhase('incomplete');
+      return;
+    }
     timerRef.current = setInterval(() => {
-      const s = Math.min(RECOVERY_DURATION, Math.floor((Date.now() - startTs) / 1000));
-      setElapsed(s);
-
-      // Capture windows at 60,90,120,150,180 — using average of last 5s
-      for (const t of CAPTURE_TIMES) {
-        const key = String(t);
-        if (capturedRef.current[key] !== undefined) continue;
-        // Grace: capture as soon as the checkpoint is reached OR within 8s
-        // afterwards while waiting for reconnection.
-        const withinCapture = s >= t;
-        const withinGrace = s >= t && s <= t + 8;
-        if (withinCapture) {
-          const avg = hr.averageLastMs(5_000);
-          const live = hr.hr;
-          const value = avg && avg > 0 ? avg : (live && live > 0 ? live : 0);
-          if (value > 0) {
-            setCaptured((prev) => ({ ...prev, [key]: value }));
-          } else if (!withinGrace) {
-            // Fallback so we never end with a zero reading if grace expired.
-            setCaptured((prev) => ({ ...prev, [key]: hrPeakRef.current ?? 0 }));
-          }
-        }
-      }
-
-      if (s >= RECOVERY_DURATION) {
+      session.advance();
+      setElapsed(session.elapsed);
+      setCaptured({ ...session.captured });
+      if (session.status === 'incomplete') {
+        setErrorMsg(t('guided.incomplete.body'));
+        setPhase('incomplete');
+        void hr.disconnect();
+      } else if (session.status === 'complete') {
         clearInterval(timerRef.current);
         timerRef.current = null;
-        // NEW: gate on the AFEtm contextual interview BEFORE submitting
-        // to Replit. Never auto-submit without factors.
         setPhase('factors');
       }
     }, 500);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, hr.acquisition, hr.disconnect, t]);
+
+  // A disconnect before target, during recovery, or before submission is terminal.
+  useEffect(() => {
+    if (hr.acquisition?.status === 'incomplete'
+      && !['incomplete', 'observation', 'submit'].includes(phase)) {
+      setErrorMsg(t('guided.incomplete.body'));
+      setPhase('incomplete');
+      void hr.disconnect();
+    }
+  }, [hr.acquisition?.status, hr.disconnect, phase, t]);
 
   // Auto-submit once we hit submit phase
   useEffect(() => {
-    if (phase !== 'submit') return;
+    if (phase !== 'submit' || submittedRef.current) return;
+    submittedRef.current = true;
     (async () => {
       try {
         // Guard: profile MUST have a numeric athleteId before hitting Replit.
@@ -207,16 +221,12 @@ export default function Guided() {
           setPhase('error');
           return;
         }
-        // Ensure all captures present (safety fallback: use current hr)
-        const readings: Record<string, number> = { '0': hrPeak ?? 0 };
-        for (const tk of CAPTURE_TIMES) {
-          const key = String(tk);
-          readings[key] = captured[key] ?? hr.hr ?? 0;
-        }
-        const res = await createAssessment({
+        const session = hr.acquisition;
+        if (!session) throw new Error('INCOMPLETE_ACQUISITION');
+        const res = await session.submit(({ fcr: recordedFcr, readings }) => createAssessment({
           device_id: deviceId,
-          fcr: fcr ?? 0,
-          age: profile?.age ?? 0,
+          fcr: recordedFcr,
+          age: profile.age,
           readings,
           factors,
           notes: notes.trim() || null,
@@ -225,15 +235,21 @@ export default function Guided() {
           safety_confirmed: true,
           safety_confirmed_at: new Date().toISOString(),
           ble_device_name: hr.connectedDevice?.name ?? null,
-        });
-        // Cleanly disconnect before navigating
-        await hr.disconnect().catch(() => {});
-        router.replace(`/assessment/${res.id}`);
+        }));
+        // Acquisition is already sealed; native cleanup cannot block the result.
+        void hr.disconnect();
+        if (mountedRef.current) router.replace(`/assessment/${res.id}`);
       } catch (e: any) {
-        if (e instanceof UpstreamError) {
+        if (!mountedRef.current) return;
+        submittedRef.current = false;
+        if (e?.message === 'INCOMPLETE_ACQUISITION') {
+          setErrorMsg(t('guided.incomplete.body'));
+          setPhase('incomplete');
+          return;
+        } else if (e instanceof UpstreamError) {
           setErrorMsg(
             t('assess.error.upstream', {
-              status: e.upstream_status,
+              status: e.upstream_status ?? '—',
               body: e.upstream_body?.slice(0, 200) || e.message,
             })
           );
@@ -250,7 +266,8 @@ export default function Guided() {
 
   // ---------------- Render helpers ----------------
   const back = async () => {
-    try { await hr.disconnect(); } catch {}
+    mountedRef.current = false;
+    void hr.disconnect();
     router.back();
   };
 
@@ -424,6 +441,17 @@ export default function Guided() {
             </Pressable>
           </View>
         )}
+        {(phase === 'observation' || phase === 'incomplete') && (
+          <View style={[shared.card, { marginTop: spacing.xl }]} testID={`guided-${phase}`}>
+            <Text style={shared.h3}>{t(phase === 'observation' ? 'guided.observation.title' : 'guided.incomplete.title')}</Text>
+            <Text style={[shared.body, { marginTop: spacing.sm }]}>
+              {t(phase === 'observation' ? 'guided.observation.body' : 'guided.incomplete.body')}
+            </Text>
+            <Pressable style={[shared.primaryBtn, { marginTop: spacing.md }]} onPress={() => router.replace('/(tabs)/new')}>
+              <Text style={shared.primaryBtnText}>{t('guided.attempt.finish')}</Text>
+            </Pressable>
+          </View>
+        )}
         {phase === 'submit' && (
           <View style={[shared.card, { alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }]}>
             <ActivityIndicator color={colors.brandGold} size="large" />
@@ -439,14 +467,14 @@ export default function Guided() {
             </Text>
             <Pressable
               style={[shared.primaryBtn, { marginTop: spacing.md }]}
-              onPress={() => { setErrorMsg(null); setPhase('scan'); }}
+              onPress={() => { void hr.disconnect(); router.replace('/(tabs)/new'); }}
             >
               <Text style={shared.primaryBtnText}>{t('guided.error.retry')}</Text>
             </Pressable>
           </View>
         )}
 
-        {errorMsg && phase !== 'error' ? (
+        {errorMsg && phase !== 'error' && phase !== 'incomplete' ? (
           <Text style={styles.error} testID="guided-error">{errorMsg}</Text>
         ) : null}
 
@@ -483,6 +511,10 @@ function phaseLabel(p: Phase, t: (k: any) => string) {
       return t('assess.context.title');
     case 'submit':
       return t('guided.phase.submit');
+    case 'observation':
+      return t('guided.observation.title');
+    case 'incomplete':
+      return t('guided.incomplete.title');
     case 'error':
       return t('guided.phase.error');
   }
@@ -683,18 +715,18 @@ function RecoveryPhase({ elapsed, captured, hrPeak, fcr, t }: {
       </Text>
       <View style={styles.captureGrid}>
         <CaptureBox label={t('guided.fcp.rhr')} value={fcr} status="done" />
-        <CaptureBox label={t('guided.recovery.peak')} value={hrPeak ?? 0} status="done" />
+        <CaptureBox label={t('guided.recovery.peak')} value={hrPeak} status={hrPeak === null ? 'pending' : 'done'} />
         {CAPTURE_TIMES.map((tm) => {
           const key = String(tm);
           const val = captured[key];
           const status: 'pending' | 'active' | 'done' =
-            val != null ? 'done' : elapsed >= tm - 5 && elapsed < tm ? 'active' : elapsed < tm ? 'pending' : 'done';
+            val != null ? 'done' : elapsed >= tm - 5 && elapsed < tm ? 'active' : 'pending';
           return (
             <CaptureBox
               key={key}
               testID={`capture-${tm}`}
               label={`t=${tm}s`}
-              value={val ?? 0}
+              value={val ?? null}
               status={status}
             />
           );
@@ -707,7 +739,7 @@ function RecoveryPhase({ elapsed, captured, hrPeak, fcr, t }: {
 function CaptureBox({
   label, value, status, testID,
 }: {
-  label: string; value: number; status: 'pending' | 'active' | 'done'; testID?: string;
+  label: string; value: number | null; status: 'pending' | 'active' | 'done'; testID?: string;
 }) {
   const border =
     status === 'done' ? colors.zoneGreen
@@ -716,7 +748,7 @@ function CaptureBox({
   return (
     <View testID={testID} style={[styles.captureBox, { borderColor: border, shadowColor: border, shadowOpacity: status !== 'pending' ? 0.5 : 0 }]}>
       <Text style={styles.captureLabel}>{label}</Text>
-      <Text style={styles.captureValue}>{value > 0 ? value : '—'}</Text>
+      <Text style={styles.captureValue}>{value !== null ? value : '—'}</Text>
       <Text style={styles.captureUnit}>bpm</Text>
     </View>
   );

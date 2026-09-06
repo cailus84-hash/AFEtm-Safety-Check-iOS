@@ -211,7 +211,6 @@ export default function AssessmentDetail() {
           ref={shareRef}
           options={{ format: 'png', quality: 1 }}
           style={styles.shareRegion}
-          testID="detail-share-region"
         >
           {!pending ? (
             <View

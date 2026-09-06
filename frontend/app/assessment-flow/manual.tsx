@@ -143,7 +143,7 @@ export default function NewAssessment() {
       if (e instanceof UpstreamError) {
         setError(
           t('assess.error.upstream', {
-            status: e.upstream_status,
+            status: e.upstream_status ?? '—',
             body: e.upstream_body?.slice(0, 200) || e.message,
           })
         );

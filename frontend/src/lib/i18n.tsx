@@ -527,6 +527,12 @@ const dict = {
     'guided.ready.body':
       'Get comfortable and calm. In the next step we will record your Resting HR (RHR).',
     'guided.fcr.title': 'Record your RHR',
+    'guided.observation.title': 'Observation / Target HR Not Reached',
+    'guided.observation.body': 'The measured heart rate did not reach the required target. This attempt is not a valid AFE™ assessment and will not be submitted for classification.',
+    'guided.observation.unsaved': 'The observation could not be saved locally. No assessment was submitted.',
+    'guided.incomplete.title': 'Incomplete assessment',
+    'guided.incomplete.body': 'The sensor disconnected, the app was interrupted, or eligible heart-rate samples were missing. This attempt cannot be submitted. Start a new assessment.',
+    'guided.attempt.finish': 'Return to assessment selection',
     'guided.fcr.body':
       'Sit and breathe calmly for ~1 minute. When your live HR is stable, press Register. We will automatically average the last 15 s.',
     'guided.fcr.register': 'Register RHR',
@@ -1149,6 +1155,12 @@ const dict = {
     'guided.ready.body':
       'Ponte cómodo y en calma. En el siguiente paso registraremos tu Frecuencia Cardiaca en Reposo (FCr).',
     'guided.fcr.title': 'Registra tu FCr',
+    'guided.observation.title': 'Observación / FC objetivo no alcanzada',
+    'guided.observation.body': 'La FC medida no alcanzó el objetivo requerido. Este intento no es una evaluación AFE™ válida y no se enviará para clasificación.',
+    'guided.observation.unsaved': 'No se pudo guardar la observación localmente. No se envió ninguna evaluación.',
+    'guided.incomplete.title': 'Evaluación incompleta',
+    'guided.incomplete.body': 'El sensor se desconectó, la aplicación se interrumpió o faltaron muestras válidas de FC. Este intento no se puede enviar. Inicia una nueva evaluación.',
+    'guided.attempt.finish': 'Volver a seleccionar evaluación',
     'guided.fcr.body':
       'Siéntate y respira con calma durante ~1 minuto. Cuando tu FC en vivo esté estable, presiona Registrar. Promediaremos los últimos 15 s automáticamente.',
     'guided.fcr.register': 'Registrar FCr',
