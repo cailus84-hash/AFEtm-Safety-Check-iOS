@@ -66,8 +66,8 @@ actual wrapper to check native arguments and unchanged event/clock forwarding.
 
 ## Verification and remaining limits
 
-On Windows with Node 24, `node --test tests/*.test.mjs` passes **58/58** tests:
-all existing 40 plus 18 provenance/wrapper tests. Tests use native doubles, not
+On Windows with Node 24, `node --test tests/*.test.mjs` passes **78/78** tests:
+the existing 58 acquisition/provenance tests plus 20 guided UX/audio tests. Tests use native doubles, not
 compiled Swift/Kotlin or a physical sensor. The valid guided payload test checks
 all existing fields; provenance is never added to the assessment API request.
 
@@ -94,3 +94,45 @@ causes substitution. Physical measurement-time provenance is not claimed.
 No backend, API helper/contract, manual flow, physiological/result formulas,
 thresholds, billing, authentication, production/native configuration or Watch
 code is changed by this step.
+
+## Guided audio and stage transitions
+
+The guided screen automatically calls the existing `startRecovery` controller
+when its fresh eligible reading reaches the unchanged target. The target cue is
+scheduled immediately before that call; no audio promise is awaited. The native
+receipt clock still defines t=0 and all five fixed windows. Sound does not gate
+acquisition, and neither sound status nor UI progress enters the AFE payload.
+
+Seven original PCM assets live in `assets/audio`: rest confirmation, target
+success, recovery start, checkpoint, HR180 double-beep, neutral warning and a
+subtle action click. Each lasts under half a second. Regenerate these assets with
+`node scripts/generate-protocol-cues.mjs` if needed; this is not a build hook.
+Checkpoint cues follow confirmed captures only. Warnings interrupt and discard
+queued progress sounds. Repeated renders cannot repeat a keyed cue. Players and
+queued sounds are released on unmount; backgrounding cancels playback.
+
+`protocolAudio.test.mjs` tests queue ordering, cancellation, native-player doubles,
+legacy-module failure, playback errors and WAV integrity. The guided tests cover
+automatic target entry, invalid/stale input, confirmed checkpoint cues and payload
+preservation with audio unavailable. No native sound output or visual iPhone
+rendering has been verified on this Windows host.
+
+`expo-audio` is pinned to **1.1.1**, matching Expo SDK 54's bundled recommendation.
+It must be included in the next separately authorized native binary. No config
+plugin, recording API, microphone permission request, native bridge or production
+configuration was changed. The dependency's Android manifest declares recording
+permission by default; an eventual Android build should review that library
+permission separately. This task does not alter build configuration.
+
+Full TypeScript check passes with zero errors. ESLint invoked directly over Expo's
+default `src`, `app`, and existing `components` scope passes with zero errors and
+three pre-existing warnings. The Expo wrapper itself cannot find `npx` on this
+host. An additional whole-repository lint scan found 26 pre-existing errors and
+seven pre-existing warnings in broader sources/tests/vendor files; those are
+outside this UX change. No new lint errors or warnings remain.
+
+Physical iPhone validation remains required for audibility, volume/silent-mode
+behavior, headphones/Bluetooth audio routing, interruptions, perceived transition
+timing, on-screen layout, and continuous Verity Sense acquisition while cues play.
+No push, deployment, prebuild, native build or Watch work was performed for this
+audio/UX task.
