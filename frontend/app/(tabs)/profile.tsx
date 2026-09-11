@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Profile, fetchProfile, getDeviceId } from '@/src/lib/api';
+import { Profile, fetchProfile, getDeviceId, deleteAllMyData } from '@/src/lib/api';
 import { IOS_PAYWALL_ENABLED } from '@/src/lib/billing';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n, Lang } from '@/src/lib/i18n';
@@ -21,6 +22,31 @@ export default function ProfileTab() {
   const { t, lang, setLang } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteAll = useCallback(async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const id = await getDeviceId();
+      await deleteAllMyData(id);
+      // Local personal data (reminders) also goes away. The device id and
+      // language preference stay — they are not personal data.
+      await AsyncStorage.removeItem('afetm.reminders').catch(() => {});
+      setConfirmDelete(false);
+      setProfile(null);
+      // Pop any mounted stacks (web keeps the tabs group alive otherwise)
+      // so the user lands back on the onboarding index.
+      try { router.dismissAll(); } catch {}
+      router.replace('/');
+    } catch {
+      setDeleteError(t('profile.delete.error'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [router, t]);
 
   const load = useCallback(async () => {
     try {
@@ -203,6 +229,57 @@ export default function ProfileTab() {
             </View>
             <MaterialCommunityIcons name="chevron-right" size={18} color={colors.onSurfaceTertiary} />
           </Pressable>
+
+          {/* Delete my data — Apple Guideline 5.1.1(v). Two-step inline
+              confirmation; erases ALL server data for this device. */}
+          <View style={styles.dangerCard} testID="profile-delete-card">
+            <Pressable
+              testID="profile-delete-btn"
+              style={styles.dangerRow}
+              onPress={() => { setConfirmDelete((v) => !v); setDeleteError(null); }}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.zoneRed} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dangerTitle}>{t('profile.delete.title')}</Text>
+                <Text style={styles.tourHint}>{t('profile.delete.body')}</Text>
+              </View>
+              <MaterialCommunityIcons
+                name={confirmDelete ? 'chevron-up' : 'chevron-right'}
+                size={18}
+                color={colors.onSurfaceTertiary}
+              />
+            </Pressable>
+            {confirmDelete && (
+              <View style={styles.dangerConfirm} testID="profile-delete-confirm-area">
+                <Text style={styles.dangerWarn}>{t('profile.delete.warn')}</Text>
+                {deleteError ? (
+                  <Text style={styles.dangerError} testID="profile-delete-error">{deleteError}</Text>
+                ) : null}
+                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
+                  <Pressable
+                    testID="profile-delete-cancel"
+                    style={styles.dangerCancelBtn}
+                    disabled={deleting}
+                    onPress={() => setConfirmDelete(false)}
+                  >
+                    <Text style={styles.dangerCancelText}>{t('profile.delete.cancel')}</Text>
+                  </Pressable>
+                  <Pressable
+                    testID="profile-delete-confirm"
+                    style={[styles.dangerConfirmBtn, deleting && { opacity: 0.6 }]}
+                    disabled={deleting}
+                    onPress={handleDeleteAll}
+                  >
+                    {deleting ? (
+                      <ActivityIndicator size="small" color={colors.onSurface} />
+                    ) : (
+                      <Text style={styles.dangerConfirmText}>{t('profile.delete.confirm')}</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
 
           {/* Personal-Use License card */}
           <View style={styles.licenseCard} testID="profile-license-card">
@@ -435,4 +512,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   licenseBtnText: { flex: 1, color: colors.brandGold, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  dangerCard: {
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1, borderColor: '#3A1515',
+    backgroundColor: '#160D0D',
+  },
+  dangerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    padding: spacing.md, minHeight: 48,
+  },
+  dangerTitle: { color: colors.zoneRed, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  dangerConfirm: {
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    borderTopWidth: 1, borderTopColor: '#3A1515', paddingTop: spacing.md,
+  },
+  dangerWarn: { color: colors.onSurfaceSecondary, fontSize: 12, lineHeight: 17 },
+  dangerError: { color: colors.zoneRed, fontSize: 12, marginTop: spacing.sm },
+  dangerCancelBtn: {
+    flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  dangerCancelText: { color: colors.onSurface, fontSize: 13, fontWeight: '700' },
+  dangerConfirmBtn: {
+    flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.zoneRed,
+  },
+  dangerConfirmText: { color: colors.onSurface, fontSize: 13, fontWeight: '800' },
 });

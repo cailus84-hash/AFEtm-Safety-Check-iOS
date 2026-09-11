@@ -90,9 +90,12 @@ class SubmissionTests(unittest.IsolatedAsyncioTestCase):
             "athleteId": 123, "athleteName": "Test Athlete", "factors": ["none"]}))
         forwarded = self.calls[1][1].copy()
         self.assertTrue(forwarded.pop("safetyConfirmedAt"))
+        # Replit contract (2026-09-10): the assessment payload MUST carry
+        # the official athleteId and link the logged contextual interview.
         self.assertEqual(forwarded, dict(age=40, restingHr=60, maxHr=150,
             hr60s=125, hr90s=115, hr120s=105, hr150s=95, hr3m=85,
-            safetyConfirmed=True, fcpv=mobile_payload()["fcpv"]))
+            safetyConfirmed=True, fcpv=mobile_payload()["fcpv"],
+            athleteId=123, contextInterviewId="interview-1"))
         self.db.assessments.insert_one.assert_awaited_once()
 
     async def test_manual_payload_still_works(self):

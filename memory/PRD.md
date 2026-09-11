@@ -200,3 +200,13 @@ Guidelines in `/app/design_guidelines.json`. Dark-first utility aesthetic with g
   `safety_confirmed_at`, `ble_device_name` (ignored by assessment logic).
 - Env hardening: `_clean_env()` strips quotes/whitespace from
   AUTHORITATIVE_UPSTREAM_URL/TOKEN (production 401 root-cause fix).
+
+## Session 2026-09-11 (fork) — Replit contract fix + App Store items
+- **Workspace synced**: connected `origin` → `cailus84-hash/AFEtm-Safety-Check-iOS`, fast-forwarded local `main` `4d23de1` → `8485501` ("Harden mobile assessment validation"). Verified `feat/protocol-audio-cues` tip `3143b86` has IDENTICAL content to `8485501` (empty diff).
+- **ROOT CAUSE — Sept 10 06:50 CT failure**: Replit `/api/assessments` now REQUIRES an `athleteId` that exists AND belongs to the token's account. Without it → upstream 500; unknown id → 404 "Athlete not found"; other user's athlete → 403. Emergent's payload didn't include athleteId at all.
+- **FIX (transport only, no algorithm change)**: `_call_upstream()` now forwards `athleteId` + `contextInterviewId`; resync path validates profile athleteId too. Upstream 404/403 mapped to controlled Spanish `reason` shown in-app (UpstreamError.reason in api.ts, rendered by manual/guided flows).
+- **PENDING EXTERNAL**: the Replit account behind our token (userId 53969071) has NO registered athletes (probed ids 1–40: only 2 & 6 exist, owned by others). Full E2E green requires the user to register the athlete on Replit and put that real athleteId in the mobile profile.
+- **Delete my data (Apple 5.1.1v)**: `DELETE /api/profile?device_id=` erases profile+assessments+diagnostics; Profile tab danger card with two-step inline confirm; clears local reminders; routes to onboarding (dismissAll + replace('/')).
+- **Root ErrorBoundary**: `src/components/ErrorBoundary.tsx` wraps Stack in `_layout.tsx` (bilingual static fallback + retry).
+- **Testing**: backend pytest 23/23 + curl E2E (incomplete data → controlled 400 "Falta lectura en t=Xs", no ghost records); testing_agent frontend iteration_9 ALL PASS.
+- **NOT DONE by user request**: no deps removed, billing untouched, diagnostics view kept, no build/publish triggered.

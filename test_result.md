@@ -101,3 +101,29 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Session 2026-09-11 (fork) — main agent
+frontend:
+  - task: "Delete my data (Apple 5.1.1v) — Profile danger card + DELETE /api/profile"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(tabs)/profile.tsx, frontend/src/lib/api.ts, backend/server.py"
+    needs_retesting: true
+    status_history:
+      - agent: "main"
+        comment: "Two-step inline confirm card (testID profile-delete-btn / profile-delete-confirm / profile-delete-cancel). Backend DELETE /api/profile erases profile+assessments+diagnostics. Backend verified via curl (200, profile null after)."
+  - task: "Root ErrorBoundary"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ErrorBoundary.tsx, frontend/app/_layout.tsx"
+    needs_retesting: true
+  - task: "Upstream 424 controlled 'reason' shown in assessment error (athleteId not found)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py (_call_upstream athleteId forwarding), frontend/src/lib/api.ts (UpstreamError.reason), manual.tsx, guided.tsx"
+    needs_retesting: true
+    status_history:
+      - agent: "main"
+        comment: "ROOT CAUSE of Sept 10 06:50 failure: Replit now requires existing+owned athleteId in /api/assessments (500 without it, 404 if unknown). Backend now forwards athleteId+contextInterviewId. Real Replit has NO athlete for our token, so a valid submit correctly returns 424 with reason 'athleteId (N) not found' — THIS IS EXPECTED until user registers athlete upstream. Do NOT report 424 as a bug."
+agent_communication:
+  - agent: "main"
+    message: "Backend fully verified via bash: pytest 23/23 pass; incomplete data returns controlled 400 messages (Falta lectura en t=Xs); no ghost records. Frontend needs UI verification only: onboarding -> create profile (with athleteId) -> profile tab delete-my-data flow, and assessment submit showing controlled 424 reason."

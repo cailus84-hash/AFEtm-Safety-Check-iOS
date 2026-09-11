@@ -1,0 +1,53 @@
+{
+  "summary": "FRONTEND-ONLY iteration per main-agent directive (backend already 23/23). Exercised the four requested flows on the live web preview at https://safety-check-mvp.preview.emergentagent.com via Playwright (mobile viewport 390x844). Onboarding index renders (GET STARTED CTA visible with testID onboarding-cta-start). Manual assessment happy-path with athleteId=4521, fcr=70, readings={0:170,60:125,90:115,120:105,150:95,180:90}, factor 'none' → the app displays a CONTROLLED, non-crashing Spanish error banner (testID assessment-error) with the exact expected text: 'Authoritative AFEtm server rejected the request (HTTP 404). Detail: El servidor AFEtm no encontró tu athleteId (4521). Verifica que tu perfil use el athleteId oficial registrado en tu cuenta AFEtm.. The assessment WAS NOT saved.'; user stays on the assessment screen (testID new-assessment-screen still mounted), no white screen, error-boundary-fallback NOT triggered, and GET /api/assessments returns count=0 → no persistence. Client-side ATHLETE_ID_MISSING gate also verified (when profile lacks athlete_id, the same testID assessment-error surfaces the local message with no upstream call). Profile 'Delete my data' danger card fully functional: profile-delete-btn expands profile-delete-confirm-area with the correct warning copy ('This cannot be undone. Your profile, all assessments and diagnostic traces will be permanently deleted from AFEtm servers.'), profile-delete-cancel collapses it, re-opening and pressing profile-delete-confirm actually erases data (verified GET /api/profile?device_id=... returns HTTP 200 with body 'null' and GET /api/assessments returns []). ErrorBoundary: no fallback rendered across index, (tabs) home, (tabs) history, (tabs) profile, /assessment-flow/manual — root ErrorBoundary from app/_layout.tsx does not interfere with normal navigation. ONE MINOR WEB-ONLY UX GAP FOUND: after profile-delete-confirm, router.replace('/') lands on (tabs)/index (home) with an empty state ('Hello', 'No previous assessments') instead of the app/index.tsx onboarding screen with GET STARTED. The tabs group remains mounted on Expo Router web and '/' resolves to (tabs)/index while the tabs layout is active. Data deletion itself is correct. On native iOS this typically pops the tabs stack, so this is likely a web-preview-only artifact; flagged for main-agent verification. React Native / Expo hygiene: (a) console shows 'shadow* style props are deprecated. Use boxShadow' and 'props.pointerEvents is deprecated. Use style.pointerEvents' repeatedly — RN Web 0.19+ warnings, non-blocking but should be migrated; (b) '[expo-notifications] Listening to push token changes is not yet fully supported on web' — informational only. No deprecated packages (expo-av, expo-barcode-scanner, expo-background-fetch) detected in the reviewed files.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Post-delete navigation (web)",
+        "issue": "After tapping profile-delete-confirm, router.replace('/') on web lands on (tabs)/index (Home tab empty state) instead of app/index.tsx onboarding with 'GET STARTED'. Server-side deletion is correct (profile=null, assessments=0). The tabs group stays mounted so '/' resolves inside it. Reference: /app/frontend/app/(tabs)/profile.tsx:40",
+        "testID": "onboarding-cta-start",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "RN Web style deprecation",
+        "issue": "Console repeatedly warns: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Multiple screens use shadowColor/shadowOpacity/shadowRadius/shadowOffset (e.g. profile.tsx avatar/targetChip/dangerConfirmBtn styles). Non-blocking on native but flagged for RN Web 0.19+."
+      },
+      {
+        "component": "RN Web pointerEvents deprecation",
+        "issue": "Console warns: 'props.pointerEvents is deprecated. Use style.pointerEvents.' Triggered by <LinearGradient pointerEvents=\"none\"> in app/index.tsx:119 (onboarding hero overlay)."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_9.json"
+  ],
+  "action_items": [
+    "OPTIONAL / LOW: on web only, after profile-delete-confirm the user lands on (tabs)/home empty state instead of onboarding /. Consider router.dismissAll() or router.replace('/index') / an explicit unmount of the tabs group, OR verify behavior on native iOS build where the tabs stack should pop back to /. Server-side deletion is correct so this is UX-only.",
+    "OPTIONAL: migrate shadow* style props to boxShadow and pointerEvents prop to style.pointerEvents to silence RN Web 0.19+ deprecation warnings (cosmetic, no functional impact)."
+  ],
+  "critical_code_review_comments": [
+    "profile.tsx delete handler correctly: (1) calls deleteAllMyData(device_id), (2) clears AsyncStorage 'afetm.reminders', (3) resets local state, (4) router.replace('/') — logic is sound; only web navigation quirk noted above.",
+    "manual.tsx correctly guards on hasAthleteId before submitting (local check → t('assess.error.athleteId')) and correctly surfaces UpstreamError.reason via t('assess.error.upstream', {status, body}) — the Spanish 'El servidor AFEtm no encontró tu athleteId (4521)' text was rendered verbatim from api.ts UpstreamError.reason.",
+    "ErrorBoundary in app/_layout.tsx is correctly placed above I18nProvider (safe because fallback copy is bilingual static). No dependency on i18n during error render.",
+    "api.ts req() correctly detects AUTHORITATIVE_UPSTREAM_ERROR envelope by code OR by upstream_status+upstream_body presence — resilient to future status changes (verified with live 424 wrapping upstream 404).",
+    "No MongoDB _id leakage observed in any tested response."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (main agent already 23/23)",
+    "frontend": "100% of required flows pass — 1 low-severity web-only UX gap noted"
+  },
+  "seed_data_creation": "Three transient device_ids seeded via /api/profile/accept-terms + /api/profile + /api/subscription/start-trial for onboarding shortcut, all subsequently cleaned via /api/profile DELETE (last one auto-deleted via delete-my-data flow). No lingering test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The three requested feature verifications ALL pass on web preview: (1) manual assessment with valid athleteId=4521 surfaces the Spanish upstream 404/424 error banner as a CONTROLLED message (not a crash) — this is EXPECTED per user note (Replit registry has no athlete for our token), so do not attempt to 'fix' it; (2) 'Delete my data' Apple 5.1.1(v) card is fully wired with correct testIDs profile-delete-btn / profile-delete-confirm-area / profile-delete-cancel / profile-delete-confirm and server DELETE returns null profile; (3) root ErrorBoundary at app/_layout.tsx does not interfere anywhere — no fallback triggered during normal navigation on Home/History/Profile/Assessment. Only follow-up is the low-severity web-only routing quirk after delete (tabs remain mounted); best verified on a native iOS build. Terms screen note for future agents: /terms requires ticking BOTH data-testid=\"terms-chk-self\" AND data-testid=\"terms-chk-terms\" checkboxes before data-testid=\"terms-accept-btn\" will advance; forgetting the checkboxes leaves the user on /terms and confuses playwright timing.",
+  "rca_of_issue": "N/A — no regressions. The Spanish 'El servidor AFEtm no encontró tu athleteId (4521)' text is EXPECTED behavior surfaced correctly by the frontend UpstreamError branch (api.ts:99-113, 130-140) and rendered via manual.tsx:144-149 t('assess.error.upstream'). Upstream returned HTTP 404 (not 401 as in iteration 8's probe with different payload) — the /api/assessments endpoint on Replit responds 404 when the athleteId is unknown, and the backend wraps this in a 424 AUTHORITATIVE_UPSTREAM_ERROR envelope with a bilingual 'reason' field that the client displays."
+}

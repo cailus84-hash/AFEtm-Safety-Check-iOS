@@ -6,6 +6,7 @@ import { LogBox } from "react-native";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { I18nProvider } from "@/src/lib/i18n";
 import { ensureIOSFreeAccess } from "@/src/lib/billing";
+import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 
 
 // Disable logbox errors etc so that users can see the app
@@ -33,8 +34,10 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <I18nProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </I18nProvider>
+    <ErrorBoundary>
+      <I18nProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </I18nProvider>
+    </ErrorBoundary>
   );
 }

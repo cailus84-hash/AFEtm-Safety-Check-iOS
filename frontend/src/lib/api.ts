@@ -92,6 +92,9 @@ export class UpstreamError extends Error {
   upstream_body?: string;
   upstream_url?: string;
   code?: string;
+  /** Controlled, human-readable explanation from the Emergent backend
+   *  (e.g. "athleteId not found upstream"). Preferred over raw bodies. */
+  reason?: string;
   constructor(status: number, detail: any) {
     const msg =
       (detail && (detail.message || detail.detail)) ||
@@ -104,6 +107,7 @@ export class UpstreamError extends Error {
       this.upstream_status = detail.upstream_status;
       this.upstream_body = detail.upstream_body;
       this.upstream_url = detail.upstream_url;
+      this.reason = detail.reason;
     }
   }
 }
@@ -244,6 +248,14 @@ export async function getAssessment(id: string, deviceId: string) {
 export async function deleteAssessment(id: string, deviceId: string) {
   return req<{ deleted: boolean }>(
     `/assessments/${id}?device_id=${encodeURIComponent(deviceId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+/** Apple 5.1.1(v) — permanently erase ALL server data for this device. */
+export async function deleteAllMyData(deviceId: string) {
+  return req<{ deleted: boolean }>(
+    `/profile?device_id=${encodeURIComponent(deviceId)}`,
     { method: 'DELETE' }
   );
 }

@@ -144,7 +144,7 @@ export default function NewAssessment() {
         setError(
           t('assess.error.upstream', {
             status: e.upstream_status ?? '—',
-            body: e.upstream_body?.slice(0, 200) || e.message,
+            body: e.reason || e.upstream_body?.slice(0, 200) || e.message,
           })
         );
       } else if (typeof e?.message === 'string' && e.message.includes('ATHLETE_ID_MISSING')) {

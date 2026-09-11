@@ -693,7 +693,11 @@ async def _call_upstream_context_interview(
     return data, None
 
 
-async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[dict]]:
+async def _call_upstream(
+    a: "AssessmentIn",
+    athlete_id: Optional[int] = None,
+    context_interview_id: Optional[str] = None,
+) -> tuple[Optional[dict], Optional[dict]]:
     """Delegate calculation to the authoritative upstream server.
 
     Returns a tuple ``(derived, error)`` where exactly one is populated:
@@ -741,6 +745,17 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         # Extra context passed through — Replit may ignore unknown fields.
         "fcpv": a.fcpv.model_dump(),
     }
+    # Replit (as of 2026-09-10) REQUIRES the official athleteId in the
+    # assessment payload and enforces that the athlete exists AND belongs
+    # to the API token's account. Omitting it triggers an upstream 500.
+    if athlete_id is not None:
+        payload["athleteId"] = int(athlete_id)
+    if context_interview_id is not None:
+        # Link the previously logged contextual interview when available.
+        try:
+            payload["contextInterviewId"] = int(context_interview_id)
+        except (TypeError, ValueError):
+            payload["contextInterviewId"] = context_interview_id
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
             r = await c.post(url, headers=headers, json=payload)
@@ -751,11 +766,25 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
     if r.status_code not in (200, 201):
         body = r.text[:2000]
         logging.warning("Upstream %s: %s", r.status_code, body[:200])
-        return None, {
+        error: dict = {
             "upstream_url": url,
             "upstream_status": r.status_code,
             "upstream_body": body,
         }
+        # Controlled explanations for the athlete-registry contract so the
+        # mobile user sees an actionable message instead of a raw 4xx/5xx.
+        if r.status_code == 404:
+            error["reason"] = (
+                "El servidor AFEtm no encontró tu athleteId "
+                f"({athlete_id}). Verifica que tu perfil use el athleteId "
+                "oficial registrado en tu cuenta AFEtm."
+            )
+        elif r.status_code == 403:
+            error["reason"] = (
+                f"El athleteId ({athlete_id}) pertenece a otra cuenta AFEtm. "
+                "Usa el athleteId oficial de tu propia cuenta."
+            )
+        return None, error
     try:
         data = r.json()
         if not isinstance(data, dict):
@@ -1197,7 +1226,9 @@ async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
             context_interview_id = str(_cid_raw) if _cid_raw is not None else None
             # STEP 2/2 — Now the actual assessment call.
             diag["assessment_sent"] = True
-            derived, error = await _call_upstream(a)
+            derived, error = await _call_upstream(
+                a, athlete_id_num, context_interview_id
+            )
             if error is not None:
                 diag["assessment_status"] = error.get("upstream_status")
                 diag["replit_http_response"] = {
@@ -1275,6 +1306,7 @@ async def resync_assessment(aid: str, device_id: str = Query(...)):
     of the assessment. Requests from any other device are rejected 403.
     """
     await _require_owned_profile(device_id)
+    profile = await db.profiles.find_one({"device_id": device_id}, {"_id": 0}) or {}
     doc = await _require_owned_assessment(aid, device_id)
     if doc.get("calc_source") == "authoritative":
         return Assessment(**doc)
@@ -1295,7 +1327,23 @@ async def resync_assessment(aid: str, device_id: str = Query(...)):
     for t in TIMES:
         if str(t) not in a.readings:
             raise HTTPException(400, f"Falta lectura en t={t}s")
-    upstream, error = await _call_upstream(a)
+    # Replit requires the official athleteId also on resync.
+    try:
+        resync_aid = TypeAdapter(Annotated[int, Field(gt=0)]).validate_python(
+            profile.get("athlete_id")
+        )
+    except ValidationError:
+        raise HTTPException(400, detail={
+            "code": "ATHLETE_ID_MISSING",
+            "message": (
+                "This account has no AFEtm athleteId. Please provide "
+                "your official AFEtm athleteId in your profile before "
+                "re-syncing an assessment."
+            ),
+        })
+    upstream, error = await _call_upstream(
+        a, resync_aid, doc.get("context_interview_id")
+    )
     if error is not None:
         # Same rule: never hide a real upstream failure behind a pending record.
         raise HTTPException(
@@ -1357,6 +1405,25 @@ async def delete_assessment(aid: str, device_id: str = Query(...)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Assessment not found")
     return {"deleted": True}
+
+
+@api_router.delete("/profile")
+async def delete_all_my_data(device_id: str = Query(...)):
+    """Permanently erase ALL server-side data for this device.
+
+    Apple Guideline 5.1.1(v): the athlete must be able to delete their
+    account/data from within the app. Removes the profile (including the
+    subscription mirror), every assessment and every diagnostics trace.
+    """
+    prof = await db.profiles.delete_one({"device_id": device_id})
+    assess = await db.assessments.delete_many({"device_id": device_id})
+    diags = await db.diagnostics.delete_many({"device_id": device_id})
+    return {
+        "deleted": True,
+        "profile_deleted": prof.deleted_count,
+        "assessments_deleted": assess.deleted_count,
+        "diagnostics_deleted": diags.deleted_count,
+    }
 
 
 # ---------- App wiring ----------
