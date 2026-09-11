@@ -6,8 +6,9 @@ import httpx
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from typing import Annotated, List, Optional, Dict
+from math import isfinite
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -225,9 +226,9 @@ NOTES_MAX = 2000
 
 class AssessmentIn(BaseModel):
     device_id: str
-    fcr: int                              # Resting HR
-    age: int
-    readings: Dict[str, int]              # { "0","30","60","90","120","180" -> bpm }
+    fcr: Annotated[int, Field(gt=0, strict=True)]  # Actual resting HR
+    age: int = Field(gt=0, strict=True)
+    readings: Dict[str, Annotated[int, Field(gt=0, strict=True)]]  # 0/60/90/120/150/180 s
     fcpv: FCPv = Field(default_factory=FCPv)
     # Official AFEtm contextual interview payload (sent to Replit
     # /api/context-interviews before /api/assessments).
@@ -679,9 +680,17 @@ async def _call_upstream_context_interview(
             "upstream_body": body,
         }
     try:
-        return r.json(), None
-    except Exception:
-        return {}, None
+        data = r.json()
+        if not isinstance(data, dict):
+            raise ValueError("Expected a JSON object")
+    except ValueError:
+        return None, {
+            "upstream_url": url,
+            "upstream_status": r.status_code,
+            "upstream_body": r.text[:2000],
+            "reason": "Invalid contextual interview response; expected a JSON object",
+        }
+    return data, None
 
 
 async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[dict]]:
@@ -749,7 +758,9 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         }
     try:
         data = r.json()
-    except Exception:
+        if not isinstance(data, dict):
+            raise ValueError("Expected a JSON object")
+    except ValueError:
         return None, {
             "upstream_url": url,
             "upstream_status": r.status_code,
@@ -764,6 +775,10 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
     zone_norm = str(zone_raw).strip().upper() if zone_raw else None
     pattern_raw = data.get("pattern") or data.get("recoveryPattern")
     pattern_norm = str(pattern_raw).strip().upper() if pattern_raw else None
+    def present(*keys):
+        # Zero is an authoritative value, not an absent field.
+        return next((data[k] for k in keys if data.get(k) is not None), None)
+
     derived = {
         # Authoritative TARGET HR (a.k.a. FCP / HRP / targetHr) — must
         # come from Replit's calculation. Accept the canonical alternate
@@ -778,19 +793,11 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
         ),
         "hr_peak": data.get("hr_peak") or data.get("maxHr") or a.readings.get("0"),
         # HRR at 3 min is the canonical AFEtm HRR reported to the athlete.
-        "hrr": (
-            data.get("hrr")
-            or data.get("hrr180")
-            or data.get("hrr90")
-        ),
+        "hrr": present("hrr", "hrr180", "hrr90"),
         # RECpct at 3 min is the canonical AFEtm recovery-percent value.
-        "recpct": _num(
-            data.get("recpct")
-            or data.get("recPct180")
-            or data.get("recPercent180")
-        ),
-        "aurc": _num(data.get("aurc")),
-        "tau": _num(data.get("tau")),
+        "recpct": present("recpct", "recPct180", "recPercent180"),
+        "aurc": data.get("aurc"),
+        "tau": data.get("tau"),
         "pattern": pattern_norm,
         "zone": zone_norm,
         "action": data.get("action") or "",
@@ -810,6 +817,23 @@ async def _call_upstream(a: "AssessmentIn") -> tuple[Optional[dict], Optional[di
                 "upstream_body": r.text[:2000],
                 "reason": f"Missing required field '{k}' in authoritative response",
             }
+    # Validate the existing mobile DTO types before any database write.
+    # This only checks transport integrity; it does not calculate a result.
+    for key, value in derived.items():
+        if value is None:
+            continue
+        try:
+            value = TypeAdapter(Assessment.model_fields[key].annotation).validate_python(value)
+            if isinstance(value, (int, float)) and not isfinite(value):
+                raise ValueError("Non-finite value")
+        except (ValidationError, ValueError, OverflowError):
+            return None, {
+                "upstream_url": url,
+                "upstream_status": r.status_code,
+                "upstream_body": r.text[:2000],
+                "reason": f"Invalid field '{key}' in authoritative response",
+            }
+        derived[key] = value
     return derived, None
 
 
@@ -1030,7 +1054,16 @@ async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
     # Extra safety: the age used to compute FCP must match the profile's age.
     # Mismatches are treated as an ownership violation (someone is trying to
     # submit for a different person).
-    if profile.get("age") and abs(int(profile["age"]) - int(a.age)) > 1:
+    try:
+        profile_age = TypeAdapter(Annotated[int, Field(gt=0)]).validate_python(profile.get("age"))
+        if isinstance(profile.get("age"), bool):
+            raise ValueError("Invalid age")
+    except (ValidationError, ValueError):
+        raise HTTPException(400, detail={
+            "code": "PROFILE_AGE_INVALID",
+            "message": "Your profile needs a valid age before submitting an assessment.",
+        })
+    if abs(profile_age - a.age) > 1:
         raise HTTPException(
             status_code=403,
             detail={
@@ -1050,8 +1083,10 @@ async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
     #    request and report the problem to the mobile client.
     raw_aid = profile.get("athlete_id")
     try:
-        athlete_id_num = int(raw_aid) if raw_aid is not None else None
-    except (TypeError, ValueError):
+        athlete_id_num = TypeAdapter(Annotated[int, Field(gt=0)]).validate_python(raw_aid)
+        if isinstance(raw_aid, bool):
+            athlete_id_num = None
+    except ValidationError:
         athlete_id_num = None
     if not athlete_id_num or athlete_id_num <= 0:
         raise HTTPException(
@@ -1066,6 +1101,11 @@ async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
             },
         )
     # Diagnostic trace (no logic impact)
+    if not isinstance(profile.get("name"), str) or not profile["name"].strip():
+        raise HTTPException(400, detail={
+            "code": "PROFILE_NAME_INVALID",
+            "message": "Your profile needs a name before submitting the contextual interview.",
+        })
     diag["athleteId"] = athlete_id_num
     diag["athleteName"] = profile.get("name") or ""
 
@@ -1218,9 +1258,9 @@ async def _create_assessment_impl(a: AssessmentIn, diag: dict) -> Assessment:
         "calc_notice": calc_notice,
         **derived,
     }
-    await db.assessments.insert_one(doc.copy())
-    doc.pop("_id", None)
-    return Assessment(**doc)
+    assessment = Assessment(**doc)
+    await db.assessments.insert_one(assessment.model_dump())
+    return assessment
 
 
 @api_router.post("/assessments/{aid}/resync", response_model=Assessment)
@@ -1239,13 +1279,22 @@ async def resync_assessment(aid: str, device_id: str = Query(...)):
     if doc.get("calc_source") == "authoritative":
         return Assessment(**doc)
     # Rebuild the input from the stored raw data.
-    a = AssessmentIn(
-        device_id=doc["device_id"],
-        fcr=doc["fcr"],
-        age=doc["age"],
-        readings=doc["readings"],
-        fcpv=FCPv(**(doc.get("fcpv") or {})),
-    )
+    try:
+        a = AssessmentIn(
+            device_id=doc["device_id"],
+            fcr=doc["fcr"],
+            age=doc["age"],
+            readings=doc["readings"],
+            fcpv=doc.get("fcpv") or {},
+        )
+    except (ValidationError, KeyError):
+        raise HTTPException(400, detail={
+            "code": "ASSESSMENT_DATA_INVALID",
+            "message": "This saved attempt has missing or invalid data. Please repeat the assessment.",
+        })
+    for t in TIMES:
+        if str(t) not in a.readings:
+            raise HTTPException(400, f"Falta lectura en t={t}s")
     upstream, error = await _call_upstream(a)
     if error is not None:
         # Same rule: never hide a real upstream failure behind a pending record.
@@ -1273,9 +1322,12 @@ async def resync_assessment(aid: str, device_id: str = Query(...)):
         "calc_source": "authoritative",
         "calc_notice": None,
     }
+    # Null optional upstream metrics retain their existing stored values,
+    # matching create-assessment behavior (no replacement HR samples).
+    update = {k: v for k, v in update.items() if v is not None or k == "calc_notice"}
+    assessment = Assessment(**{**doc, **update})
     await db.assessments.update_one({"id": aid}, {"$set": update})
-    doc.update(update)
-    return Assessment(**doc)
+    return assessment
 
 
 @api_router.get("/assessments", response_model=List[Assessment])
