@@ -134,8 +134,17 @@ export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
     ) {
       throw new UpstreamError(res.status, detail);
     }
+    // FastAPI validation errors identify missing/invalid assessment fields.
+    if (res.status === 422 && Array.isArray(detail)) {
+      const messages = detail.map((issue) => {
+        const field = Array.isArray(issue?.loc) ? issue.loc.filter((part: unknown) => part !== 'body').join('.') : '';
+        return typeof issue?.msg === 'string' ? `${field ? `${field}: ` : ''}${issue.msg}` : '';
+      }).filter(Boolean);
+      if (messages.length) throw new Error(messages.join('; '));
+    }
     throw new Error(
       (detail && (detail.message || detail.detail)) ||
+        (typeof detail === 'string' ? detail : '') ||
         text ||
         `HTTP ${res.status}`
     );
