@@ -210,3 +210,12 @@ Guidelines in `/app/design_guidelines.json`. Dark-first utility aesthetic with g
 - **Root ErrorBoundary**: `src/components/ErrorBoundary.tsx` wraps Stack in `_layout.tsx` (bilingual static fallback + retry).
 - **Testing**: backend pytest 23/23 + curl E2E (incomplete data → controlled 400 "Falta lectura en t=Xs", no ghost records); testing_agent frontend iteration_9 ALL PASS.
 - **NOT DONE by user request**: no deps removed, billing untouched, diagnostics view kept, no build/publish triggered.
+
+## Session 2026-09-13 — Share Color Guide
+- ColorGuideCard (Home tab) gained a "Share / Compartir" pill button: shares the OFFICIAL
+  AFEtm Visual Color Guide artwork (assets/images/afetm-hero-en|es.png, per current language)
+  via expo-sharing (native share sheet); web fallback opens the image. Installed expo-asset.
+  i18n keys: guide.share, guide.share.error. Verified E2E on web preview (full onboarding walk).
+- Athlete registration on Replit remains a USER action: token cannot create/list athletes
+  (401); user must register their athlete in their Replit AFEtm account and set the real
+  athleteId in the mobile profile, then validate from iPhone.

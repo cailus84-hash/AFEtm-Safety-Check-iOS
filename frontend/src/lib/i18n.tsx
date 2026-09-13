@@ -627,6 +627,8 @@ const dict = {
 
     // Color guide
     'guide.eyebrow': 'AFE™ VISUAL GUIDE',
+    'guide.share': 'Share',
+    'guide.share.error': 'Could not share the guide. Try again.',
     'guide.title': 'Color interpretation',
     'guide.subtitle':
       'A simple, user-friendly overview of what each color means for your next training decision.',
@@ -1267,6 +1269,8 @@ const dict = {
     'detail.share.title': 'Compartir resultado AFE™',
 
     'guide.eyebrow': 'GUÍA VISUAL AFE™',
+    'guide.share': 'Compartir',
+    'guide.share.error': 'No se pudo compartir la guía. Inténtalo de nuevo.',
     'guide.title': 'Interpretación por color',
     'guide.subtitle':
       'Resumen simple y claro de lo que significa cada color para tu próxima decisión de entrenamiento.',

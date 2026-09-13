@@ -1,7 +1,15 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
+import * as Sharing from 'expo-sharing';
 import { colors, radius, spacing } from '@/src/lib/theme';
 import { useI18n, zoneShortI18n } from '@/src/lib/i18n';
+
+const GUIDE_IMAGE_BY_LANG: Record<string, number> = {
+  en: require('../../assets/images/afetm-hero-en.png'),
+  es: require('../../assets/images/afetm-hero-es.png'),
+};
 
 type ZoneKey = 'BLUE' | 'GREEN' | 'YELLOW' | 'RED';
 
@@ -31,14 +39,66 @@ const ROWS: ZoneRow[] = [
  * this guide only explains how to react to it.
  */
 export function ColorGuideCard() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState(false);
+
+  const onShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    setShareError(false);
+    try {
+      // Share the OFFICIAL AFEtm Visual Color Guide artwork in the
+      // athlete's current language. No device permissions required —
+      // the native share sheet handles the destination.
+      const asset = Asset.fromModule(GUIDE_IMAGE_BY_LANG[lang] ?? GUIDE_IMAGE_BY_LANG.en);
+      await asset.downloadAsync();
+      const uri = asset.localUri || asset.uri;
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'AFE™ Visual Color Guide',
+          UTI: 'public.png',
+        });
+      } else {
+        // Web preview fallback — open the image so the user can save it.
+        await Linking.openURL(uri);
+      }
+    } catch {
+      setShareError(true);
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <View style={styles.card} testID="color-guide-card">
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>{t('guide.eyebrow')}</Text>
-        <Text style={styles.title}>{t('guide.title')}</Text>
-        <Text style={styles.subtitle}>{t('guide.subtitle')}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>{t('guide.eyebrow')}</Text>
+          <Text style={styles.title}>{t('guide.title')}</Text>
+          <Text style={styles.subtitle}>{t('guide.subtitle')}</Text>
+        </View>
+        <Pressable
+          testID="color-guide-share-btn"
+          onPress={onShare}
+          disabled={sharing}
+          style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.8 }]}
+          accessibilityLabel={t('guide.share')}
+        >
+          {sharing ? (
+            <ActivityIndicator size="small" color={colors.brandGold} />
+          ) : (
+            <MaterialCommunityIcons name="share-variant" size={16} color={colors.brandGold} />
+          )}
+          <Text style={styles.shareBtnText}>{t('guide.share')}</Text>
+        </Pressable>
       </View>
+      {shareError ? (
+        <Text style={styles.shareError} testID="color-guide-share-error">
+          {t('guide.share.error')}
+        </Text>
+      ) : null}
 
       <View style={styles.rows}>
         {ROWS.map((r) => (
@@ -126,7 +186,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
   },
-  header: { marginBottom: spacing.md },
+  header: { marginBottom: spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    minHeight: 44,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brandGold,
+    backgroundColor: '#141310',
+  },
+  shareBtnText: { color: colors.brandGold, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  shareError: { color: colors.zoneRed, fontSize: 11, marginBottom: spacing.sm },
   eyebrow: {
     color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700', marginBottom: 4,
   },
