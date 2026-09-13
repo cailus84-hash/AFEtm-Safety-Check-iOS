@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { useHeartRateMonitor } from '@/src/hooks/useHeartRateMonitor';
 import { useProtocolAudio } from '@/src/hooks/useProtocolAudio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,7 +32,7 @@ import {
 import { useI18n } from '@/src/lib/i18n';
 
 // Icon map for the AFEtm contextual factor toggle buttons.
-const FACTOR_ICONS: Record<ContextFactor, keyof typeof MaterialCommunityIcons.glyphMap> = {
+const FACTOR_ICONS: Record<ContextFactor, ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   illness: 'virus-outline',
   sleep: 'sleep',
   training: 'run-fast',

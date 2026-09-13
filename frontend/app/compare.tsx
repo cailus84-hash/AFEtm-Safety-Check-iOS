@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { Assessment, getAssessment, getDeviceId } from '@/src/lib/api';
 import { CompareChart } from '@/src/components/CompareChart';
 import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';

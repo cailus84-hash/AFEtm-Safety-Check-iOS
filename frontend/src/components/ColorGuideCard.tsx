@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { ComponentProps, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { Asset } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
 import { colors, radius, spacing } from '@/src/lib/theme';
@@ -16,7 +16,7 @@ type ZoneKey = 'BLUE' | 'GREEN' | 'YELLOW' | 'RED';
 type ZoneRow = {
   key: ZoneKey;
   color: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
 };
 
 const ROWS: ZoneRow[] = [
@@ -165,7 +165,7 @@ function Helper({
   icon,
   text,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
   text: string;
 }) {
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ComponentProps, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import {
   createAssessment,
@@ -29,7 +29,7 @@ const TIMES = ['0', '60', '90', '120', '150', '180'] as const;
 
 // Official AFEtm contextual factor icons for the toggle UI. Kept in sync
 // with `CONTEXT_FACTORS` from api.ts (source of truth).
-const FACTOR_ICONS: Record<ContextFactor, keyof typeof MaterialCommunityIcons.glyphMap> = {
+const FACTOR_ICONS: Record<ContextFactor, ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   illness: 'virus-outline',
   sleep: 'sleep',
   training: 'run-fast',

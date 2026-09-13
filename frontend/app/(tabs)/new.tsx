@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { useCallback } from 'react';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
 import { useI18n } from '@/src/lib/i18n';

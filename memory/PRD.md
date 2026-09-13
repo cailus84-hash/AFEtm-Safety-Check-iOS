@@ -219,3 +219,15 @@ Guidelines in `/app/design_guidelines.json`. Dark-first utility aesthetic with g
 - Athlete registration on Replit remains a USER action: token cannot create/list athletes
   (401); user must register their athlete in their Replit AFEtm account and set the real
   athleteId in the mobile profile, then validate from iPhone.
+
+## Session 2026-09-13 — Expo SDK 57 upgrade
+- Upgraded Expo SDK 54 → 57 (expo 57.0.22, react-native 0.86.3, react 19.2.3) via
+  `yarn expo install expo@^57 && yarn expo install --fix`. expo-doctor: 20/20 pass.
+- Breaking-change migrations applied:
+  * app.json: removed `newArchEnabled` and `android.edgeToEdgeEnabled` (defaults in 55+).
+  * Replaced deprecated `@expo/vector-icons` with `@react-native-vector-icons/material-design-icons`
+    (19 files; default import; `keyof typeof X.glyphMap` → `ComponentProps<typeof X>['name']` in 3 files).
+  * `src/hooks/use-icon-fonts.ts` simplified — new icon packages self-register fonts via expo-font
+    (Expo Go CDN workaround no longer needed).
+- Verified: web preview boots, full onboarding→home walk OK, icons render, tabs navigate, Share Guide intact.
+- NOTE: native Polar/BLE plugin untouched; needs a fresh dev/production build to validate on device.
