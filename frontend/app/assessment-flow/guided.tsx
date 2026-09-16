@@ -20,10 +20,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAPTURE_TIMES, RECOVERY_DURATION } from '@/src/hr/acquisition';
 import { preserveObservation } from '@/src/hr/observation';
 import { colors, radius, shared, spacing } from '@/src/lib/theme';
+import { AssessmentResultView } from '@/src/components/AssessmentResultView';
 import {
+  Assessment,
   createAssessment,
   fetchProfile,
   getDeviceId,
+  saveLocalAssessmentHistorySnapshot,
   UpstreamError,
   CONTEXT_FACTORS,
   CONTEXT_NOTES_MAX,
@@ -52,6 +55,7 @@ type Phase =
   | 'recovery'
   | 'factors'
   | 'submit'
+  | 'result'
   | 'observation'
   | 'incomplete'
   | 'error';
@@ -71,6 +75,7 @@ export default function Guided() {
   const [factors, setFactors] = useState<ContextFactor[]>([]);
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [completedResult, setCompletedResult] = useState<Assessment | null>(null);
 
   const pulse = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<any>(null);
@@ -209,6 +214,7 @@ export default function Guided() {
     timerRef.current = setInterval(() => {
       session.advance();
       setElapsed(session.elapsed);
+      setHrPeak(session.captured['0']);
       setCaptured({ ...session.captured });
       // Cues follow confirmed immutable captures, never the elapsed timer alone.
       if (session.status === 'recovery' || session.status === 'complete') {
@@ -236,7 +242,7 @@ export default function Guided() {
   // A disconnect before target, during recovery, or before submission is terminal.
   useEffect(() => {
     if (hr.acquisition?.status === 'incomplete'
-      && !['incomplete', 'observation', 'submit'].includes(phase)) {
+      && !['incomplete', 'observation', 'submit', 'result'].includes(phase)) {
       setErrorMsg(t('guided.incomplete.body'));
       setPhase('incomplete');
       void hr.disconnect();
@@ -270,9 +276,12 @@ export default function Guided() {
           safety_confirmed_at: new Date().toISOString(),
           ble_device_name: hr.connectedDevice?.name ?? null,
         }));
-        // Acquisition is already sealed; native cleanup cannot block the result.
-        void hr.disconnect();
-        if (mountedRef.current) router.replace(`/assessment/${res.id}`);
+        await saveLocalAssessmentHistorySnapshot(res);
+        if (mountedRef.current) {
+          setCompletedResult(res);
+          setPhase('result');
+          void hr.disconnect();
+        }
       } catch (e: any) {
         if (!mountedRef.current) return;
         submittedRef.current = false;
@@ -337,6 +346,15 @@ export default function Guided() {
           </View>
         </View>
       </SafeAreaView>
+    );
+  }
+
+  if (phase === 'result' && completedResult) {
+    return (
+      <AssessmentResultView
+        assessment={completedResult}
+        onClose={() => router.replace('/(tabs)')}
+      />
     );
   }
 
@@ -556,6 +574,8 @@ function phaseLabel(p: Phase, t: (k: any) => string) {
       return t('assess.context.title');
     case 'submit':
       return t('guided.phase.submit');
+    case 'result':
+      return t('detail.title');
     case 'observation':
       return t('guided.observation.title');
     case 'incomplete':

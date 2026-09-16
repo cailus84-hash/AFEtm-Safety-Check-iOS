@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import {
   getDeviceId,
   listAssessments,
 } from '@/src/lib/api';
+import { AssessmentResultView } from '@/src/components/AssessmentResultView';
 import { colors, radius, shared, spacing, zoneColor } from '@/src/lib/theme';
 import { useI18n, zoneShortI18n, patternLabelI18n } from '@/src/lib/i18n';
 
@@ -31,6 +33,7 @@ export default function History() {
   const [filter, setFilter] = useState<Filter>('ALL');
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +69,10 @@ export default function History() {
   };
 
   const filtered = filter === 'ALL' ? items : items.filter((i) => i.zone === filter);
+  const displayNumber = (value: number | null | undefined) => Number.isFinite(value) ? String(value) : '—';
+  const displayDateTime = (value: string) => Number.isFinite(Date.parse(value))
+    ? `${formatDate(value)} · ${formatTime(value)}`
+    : '—';
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']} testID="history-screen">
@@ -160,13 +167,17 @@ export default function History() {
                 const color = isPending ? colors.brandGold : zoneColor(a.zone!);
                 const label = isPending ? t('common.pending') : zoneShortI18n(t, a.zone!);
                 const isSelected = selected.includes(a.id);
-                return (
+                const card = (
                   <Pressable
-                    key={a.id}
                     testID={`history-item-${a.id}`}
-                    onPress={() =>
-                      compareMode ? toggleSelect(a.id) : router.push(`/assessment/${a.id}`)
-                    }
+                    onPressIn={() => {
+                      console.log('[AFETM_HISTORY_TAP]', {
+                        id: a.id,
+                        idString: String(a.id ?? ''),
+                        expectedPath: `/assessment/${String(a.id ?? '')}`,
+                      });
+                    }}
+                    onPress={compareMode ? () => toggleSelect(a.id) : () => setSelectedAssessment(a)}
                     onLongPress={() => {
                       if (!compareMode) setCompareMode(true);
                       toggleSelect(a.id);
@@ -197,22 +208,29 @@ export default function History() {
                         )}
                       </View>
                       <View style={styles.metaWrap}>
-                        <Meta icon="clock-outline" text={`${formatDate(a.created_at)} · ${formatTime(a.created_at)}`} />
+                        <Meta icon="clock-outline" text={displayDateTime(a.created_at)} />
                         {a.pattern ? (
                           <Meta icon="pulse" text={`${t('detail.chip.pattern')} ${patternLabelI18n(t, a.pattern)}`} />
                         ) : (
                           <Meta icon="cloud-sync-outline" text={t('common.unclassified')} />
                         )}
-                        <Meta icon="heart" text={t('history.meta.rec', { value: a.recpct })} />
+                        <Meta icon="heart" text={t('history.meta.rec', { value: displayNumber(a.recpct) })} />
                       </View>
                     </View>
                   </Pressable>
                 );
+                if (compareMode) return <View key={a.id}>{card}</View>;
+                return <View key={a.id}>{card}</View>;
               })}
             </View>
           )}
         </ScrollView>
       )}
+
+      <LocalAssessmentReport
+        assessment={selectedAssessment}
+        onClose={() => setSelectedAssessment(null)}
+      />
 
       {compareMode && (
         <View style={styles.compareBar} pointerEvents="box-none">
@@ -240,6 +258,27 @@ export default function History() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+function LocalAssessmentReport({
+  assessment,
+  onClose,
+}: {
+  assessment: Assessment | null;
+  onClose: () => void;
+}) {
+  if (!assessment) return null;
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+      testID="history-local-report-modal"
+    >
+      <AssessmentResultView assessment={assessment} onClose={onClose} />
+    </Modal>
   );
 }
 
@@ -297,6 +336,95 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
     overflow: 'hidden',
   },
+  localTopBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
+  },
+  localTopTitle: { color: colors.onSurface, fontSize: 15, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  localBanner: {
+    borderRadius: radius.lg, borderWidth: 2, padding: spacing.xl,
+    backgroundColor: colors.surfaceSecondary,
+    shadowOpacity: 0.7, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
+    elevation: 10, overflow: 'hidden',
+  },
+  localBannerIcon: {
+    width: 52, height: 52, borderRadius: 26,
+    borderWidth: 2, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+    marginBottom: spacing.md,
+  },
+  localEyebrow: { color: colors.onSurfaceTertiary, fontSize: 11, letterSpacing: 3, fontWeight: '700' },
+  localZone: { fontSize: 32, fontWeight: '900', letterSpacing: 0.5, marginTop: 6 },
+  localDesc: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  localBannerRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  localBannerChip: {
+    flex: 1,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  localBannerChipLabel: { color: colors.onSurfaceTertiary, fontSize: 10, letterSpacing: 1, fontWeight: '700' },
+  localBannerChipValue: { color: colors.onSurface, fontSize: 14, fontWeight: '800', marginTop: 4 },
+  localPendingBanner: {
+    borderRadius: radius.lg,
+    borderWidth: 2, borderColor: colors.brandGold, borderStyle: 'dashed',
+    backgroundColor: colors.surfaceSecondary,
+    padding: spacing.xl,
+    alignItems: 'flex-start',
+  },
+  localPendingTitle: { color: colors.brandGold, fontSize: 22, fontWeight: '900', letterSpacing: 0.3, marginTop: spacing.sm },
+  localDate: {
+    color: colors.onSurfaceTertiary, fontSize: 12,
+    textAlign: 'center', marginTop: spacing.lg, letterSpacing: 0.5,
+  },
+  localSectionTitle: {
+    color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700',
+    marginTop: spacing.xl, marginBottom: spacing.md,
+  },
+  localMetricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  localMetric: {
+    width: '48%', padding: spacing.md,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  localMetricLabel: { color: colors.brandGold, fontSize: 11, letterSpacing: 1, fontWeight: '700' },
+  localMetricValue: { color: colors.onSurface, fontSize: 28, fontWeight: '900', marginTop: 4 },
+  localMetricUnit: { color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: '600' },
+  localRefGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  localRefItem: {
+    flexGrow: 1, minWidth: '47%', padding: spacing.sm + 2,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  localRefLabel: { color: colors.onSurfaceTertiary, fontSize: 10, letterSpacing: 1, fontWeight: '700' },
+  localRefValue: { color: colors.onSurface, fontSize: 18, fontWeight: '800', marginTop: 2 },
+  localRefUnit: { color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: '600' },
+  localCurveWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  localCurveItem: {
+    width: '31%', alignItems: 'center', padding: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  localCurveTime: { color: colors.brandGold, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  localCurveHr: { color: colors.onSurface, fontSize: 22, fontWeight: '900', marginTop: 2 },
+  localCurveUnit: { color: colors.onSurfaceTertiary, fontSize: 10, fontWeight: '600' },
+  localFcpvRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
+  },
+  localFcpvLabel: { color: colors.onSurfaceSecondary, fontSize: 13, fontWeight: '600' },
+  localFcpvDots: { flexDirection: 'row', gap: 6 },
+  localFcpvDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1 },
+  localFcpvTotalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: spacing.md,
+  },
+  localFcpvTotalLabel: { color: colors.brandGold, fontSize: 11, letterSpacing: 2, fontWeight: '700' },
+  localFcpvTotalValue: { color: colors.onSurface, fontSize: 18, fontWeight: '900' },
   checkbox: {
     width: 22, height: 22, borderRadius: 4,
     borderWidth: 2, borderColor: colors.borderStrong,

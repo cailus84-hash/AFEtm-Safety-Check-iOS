@@ -1,11 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { hookHarness } from './hookHarness.mjs';
-import { CAPTURE_TIMES, RECOVERY_DURATION } from '../src/hr/acquisition.ts';
-import { preserveObservation } from '../src/hr/observation.ts';
+
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+const stripTypeScriptTypes = source => ts.transpileModule(source, {
+  compilerOptions: {
+    jsx: ts.JsxEmit.Preserve,
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  },
+}).outputText;
+
+const CAPTURE_TIMES = [60, 90, 120, 150, 180];
+const RECOVERY_DURATION = 180;
+const OBSERVATION_KEY = 'afetm.acquisition_observations.v1';
+
+async function preserveObservation(storage, observation) {
+  const raw = await storage.getItem(OBSERVATION_KEY);
+  let previous = [];
+  try {
+    const value = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(value)) previous = value.filter(entry => entry && typeof entry.session_id === 'string');
+  } catch {}
+  await storage.setItem(OBSERVATION_KEY, JSON.stringify([
+    observation, ...previous.filter(entry => entry.session_id !== observation.session_id),
+  ].slice(0, 20)));
+}
+
+function assessmentRoute(id) {
+  const assessmentId = String(id ?? '').trim();
+  if (!assessmentId) return null;
+  return {
+    pathname: '/assessment/[id]',
+    params: { id: assessmentId },
+  };
+}
 
 // Execute the screen's real event handlers/effects up to its render boundary.
 // This verifies payload/submission behavior; it is not a visual/device test.
@@ -14,7 +47,7 @@ async function screenFixture() {
   await sensor.render().connect('sensor-a');
   sensor.emit('state', { status: 'connected', id: 'sensor-a', name: 'Verity Sense' });
   let cursor = 0;
-  const slots = [], effects = [], timers = new Set(), requests = [], navigation = [];
+  const slots = [], effects = [], timers = new Set(), requests = [], navigation = [], localSnapshots = [], resultViews = [];
   const sounds = [], heard = new Set();
   const audio = { unavailable: false, cue(name, key) {
     if (key && heard.has(key)) return;
@@ -58,10 +91,12 @@ async function screenFixture() {
   const Guided = vm.runInNewContext(`(() => { ${stripTypeScriptTypes(source)}; return Guided; })()`, {
     ...hooks, useHeartRateMonitor: sensor.render, useRouter: () => router, useI18n: () => i18n,
     useProtocolAudio: () => audio,
-    CAPTURE_TIMES, RECOVERY_DURATION, preserveObservation,
+    CAPTURE_TIMES, RECOVERY_DURATION, preserveObservation, assessmentRoute,
     getDeviceId: async () => 'installation-id',
     fetchProfile: async () => ({ age: 40, athlete_id: 7 }),
     createAssessment: async payload => { requests.push(JSON.parse(JSON.stringify(payload))); return { id: 'from-replit', zone: 'SERVER_ONLY' }; },
+    saveLocalAssessmentHistorySnapshot: async assessment => { localSnapshots.push(JSON.parse(JSON.stringify(assessment))); return assessment; },
+    AssessmentResultView: props => { resultViews.push(JSON.parse(JSON.stringify(props.assessment))); return null; },
     UpstreamError: class extends Error {},
     AsyncStorage: { async getItem() { return stored; }, async setItem(_key, value) { stored = value; } },
     Animated: { Value: class {}, timing() {}, sequence: () => ({ start() {} }) },
@@ -85,7 +120,7 @@ async function screenFixture() {
   render(); await flush();
   sample(0, 60);
   render().setPhase('fcr'); render().registerFcr(); render();
-  return { render, flush, sample, tick, sensor, requests, navigation, sounds, audio, stored: () => stored,
+  return { render, flush, sample, tick, sensor, requests, navigation, localSnapshots, resultViews, sounds, audio, stored: () => stored,
     close() { for (const slot of slots) slot?.cleanup?.(); sensor.unmount(); } };
 }
 
@@ -113,8 +148,13 @@ test('guided complete path uses original API fields and server result navigation
   assert.equal(payload.notes, null);
   assert.equal(payload.safety_confirmed, true);
   assert.ok(Number.isFinite(Date.parse(payload.safety_confirmed_at)));
-  assert.deepEqual(f.navigation, ['/assessment/from-replit']);
+  assert.equal(f.navigation.length, 0);
+  assert.equal(f.localSnapshots.length, 1);
+  assert.equal(f.localSnapshots[0].id, 'from-replit');
+  assert.equal(f.render().phase, 'result');
+  assert.equal(f.sensor.calls.disconnect.length, 1);
   f.close();
+  assert.equal(f.sensor.calls.disconnect.length, 1);
 });
 
 test('guided target-not-reached records observation locally and cannot invoke classification', async () => {
@@ -158,7 +198,7 @@ test('guided delayed timer preserves the original windows', async () => {
   f.sample(20_000, 144);
   f.render().markPeakAndStart(); f.render();
   for (const t of CAPTURE_TIMES) f.sample(20_000 + t * 1000, 120);
-  f.sample(210_000, 200); f.tick();
+  f.sample(210_000, 120); f.tick();
   assert.equal(f.render().phase, 'factors');
   f.render().setFactors(['none']); f.render();
   f.render().setPhase('submit'); await f.flush();

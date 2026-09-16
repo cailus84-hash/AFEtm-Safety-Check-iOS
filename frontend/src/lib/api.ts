@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEVICE_ID_KEY = 'afetm.device_id';
+export const LOCAL_ASSESSMENT_HISTORY_KEY = 'afetm.local_assessment_history';
 
 function generateId(): string {
   // RFC4122 v4 lite; sufficient as a device identifier
@@ -42,6 +43,7 @@ export type FCPv = {
   recent_illness: number;
   subjective_load: number;
 };
+type SafeNumber = number | null;
 
 /**
  * Official AFEtm contextual interview factor keys.
@@ -63,20 +65,20 @@ export const CONTEXT_NOTES_MAX = 2000;
 export type Assessment = {
   id: string;
   device_id: string;
-  fcr: number;
-  age: number;
-  readings: Record<string, number>;
-  fcp_target: number;
-  hr_peak: number;
-  hrr: number;
-  recpct: number;
-  aurc: number;
-  tau: number;
+  fcr: SafeNumber;
+  age: SafeNumber;
+  readings: Record<string, SafeNumber>;
+  fcp_target: SafeNumber;
+  hr_peak: SafeNumber;
+  hrr: SafeNumber;
+  recpct: SafeNumber;
+  aurc: SafeNumber;
+  tau: SafeNumber;
   pattern: 'RAPID' | 'NORMAL' | 'DELAYED' | 'FLATTENED' | 'UNSTABLE' | null;
   zone: 'BLUE' | 'GREEN' | 'YELLOW' | 'RED' | null;
   action: string | null;
-  fcpv: FCPv;
-  fcpv_total: number;
+  fcpv: FCPv | null;
+  fcpv_total: SafeNumber;
   context_flag: boolean;
   factors?: ContextFactor[];
   notes?: string | null;
@@ -85,6 +87,148 @@ export type Assessment = {
   calc_source?: 'authoritative' | 'pending';
   calc_notice?: string | null;
 };
+
+const NUMERIC_KEYS = ['value', 'result', 'pct', 'percentage', 'recpct', 'hrr', 'aurc', 'tau'] as const;
+const TEXT_KEYS = ['text', 'label', 'message', 'en', 'es', 'value'] as const;
+const READING_TIMES = ['0', '60', '90', '120', '150', '180'] as const;
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of NUMERIC_KEYS) {
+      const n = finiteNumber(record[key]);
+      if (n !== null) return n;
+    }
+  }
+  return null;
+}
+
+function textValue(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of TEXT_KEYS) {
+      const text = textValue(record[key]);
+      if (text !== null) return text;
+    }
+  }
+  return null;
+}
+
+function normalizeZone(value: unknown): Assessment['zone'] {
+  const text = textValue(value)?.trim().toUpperCase();
+  if (text === 'BLUE' || text === 'GREEN' || text === 'YELLOW' || text === 'RED') return text;
+  return null;
+}
+
+function normalizePattern(value: unknown): Assessment['pattern'] {
+  const text = textValue(value)?.trim().toUpperCase();
+  if (text === 'RAPID' || text === 'NORMAL' || text === 'DELAYED' || text === 'FLATTENED' || text === 'UNSTABLE') return text;
+  return null;
+}
+
+function normalizeReadings(value: unknown): Record<string, SafeNumber> {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return Object.fromEntries(READING_TIMES.map((time) => [time, finiteNumber(record[time])])) as Record<string, SafeNumber>;
+}
+
+function normalizeFcpv(value: unknown): FCPv | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const fcpv = {
+    sleep: finiteNumber(record.sleep),
+    hydration: finiteNumber(record.hydration),
+    symptoms: finiteNumber(record.symptoms),
+    recent_illness: finiteNumber(record.recent_illness),
+    subjective_load: finiteNumber(record.subjective_load),
+  };
+  return Object.values(fcpv).every((v) => v !== null) ? fcpv as FCPv : null;
+}
+
+export function normalizeAssessment(raw: unknown): Assessment {
+  const record = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  return {
+    ...(record as Partial<Assessment>),
+    id: textValue(record.id) ?? '',
+    device_id: textValue(record.device_id) ?? '',
+    fcr: finiteNumber(record.fcr),
+    age: finiteNumber(record.age),
+    readings: normalizeReadings(record.readings),
+    fcp_target: finiteNumber(record.fcp_target),
+    hr_peak: finiteNumber(record.hr_peak),
+    hrr: finiteNumber(record.hrr),
+    recpct: finiteNumber(record.recpct),
+    aurc: finiteNumber(record.aurc),
+    tau: finiteNumber(record.tau),
+    pattern: normalizePattern(record.pattern),
+    zone: normalizeZone(record.zone),
+    action: textValue(record.action),
+    fcpv: normalizeFcpv(record.fcpv),
+    fcpv_total: finiteNumber(record.fcpv_total),
+    context_flag: record.context_flag === true,
+    factors: Array.isArray(record.factors) ? record.factors as ContextFactor[] : undefined,
+    notes: textValue(record.notes),
+    context_interview_id: textValue(record.context_interview_id),
+    created_at: textValue(record.created_at) ?? '',
+    calc_source: record.calc_source === 'authoritative' || record.calc_source === 'pending' ? record.calc_source : undefined,
+    calc_notice: textValue(record.calc_notice),
+  };
+}
+
+function sortAssessments(list: Assessment[]) {
+  return [...list].sort((a, b) => {
+    const at = Date.parse(a.created_at);
+    const bt = Date.parse(b.created_at);
+    if (Number.isFinite(at) && Number.isFinite(bt) && bt !== at) return bt - at;
+    return String(b.id).localeCompare(String(a.id));
+  });
+}
+
+function mergeAssessments(primary: Assessment[], secondary: Assessment[]) {
+  const byId = new Map<string, Assessment>();
+  for (const item of secondary) {
+    if (item.id) byId.set(item.id, item);
+  }
+  for (const item of primary) {
+    if (item.id) byId.set(item.id, item);
+  }
+  return sortAssessments([...byId.values()]);
+}
+
+export async function readLocalAssessmentHistory() {
+  const raw = await AsyncStorage.getItem(LOCAL_ASSESSMENT_HISTORY_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? sortAssessments(parsed.map(normalizeAssessment).filter((item) => item.id))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveLocalAssessmentHistorySnapshot(assessment: Assessment) {
+  if (!assessment.id) return assessment;
+  const existing = await readLocalAssessmentHistory();
+  const merged = mergeAssessments([assessment], existing);
+  await AsyncStorage.setItem(LOCAL_ASSESSMENT_HISTORY_KEY, JSON.stringify(merged));
+  return assessment;
+}
+
+async function saveLocalAssessmentHistorySnapshots(assessments: Assessment[]) {
+  const valid = assessments.filter((assessment) => assessment.id);
+  if (!valid.length) return readLocalAssessmentHistory();
+  const existing = await readLocalAssessmentHistory();
+  const merged = mergeAssessments(valid, existing);
+  await AsyncStorage.setItem(LOCAL_ASSESSMENT_HISTORY_KEY, JSON.stringify(merged));
+  return merged;
+}
 
 export class UpstreamError extends Error {
   status: number;
@@ -196,7 +340,9 @@ export async function createAssessment(payload: {
   safety_confirmed_at?: string;
   ble_device_name?: string | null;
 }) {
-  return req<Assessment>('/assessments', { method: 'POST', body: JSON.stringify(payload) });
+  const assessment = normalizeAssessment(await req<unknown>('/assessments', { method: 'POST', body: JSON.stringify(payload) }));
+  await saveLocalAssessmentHistorySnapshot(assessment);
+  return assessment;
 }
 
 /** TEMPORARY developer diagnostics — trace of recent assessment attempts. */
@@ -238,11 +384,21 @@ export async function fetchDiagnostics(deviceId: string, limit = 5) {
 }
 
 export async function listAssessments(deviceId: string) {
-  return req<Assessment[]>(`/assessments?device_id=${encodeURIComponent(deviceId)}`);
+  const local = await readLocalAssessmentHistory();
+  try {
+    const raw = await req<unknown>(`/assessments?device_id=${encodeURIComponent(deviceId)}`);
+    const remote = Array.isArray(raw) ? raw.map(normalizeAssessment) : [];
+    const merged = mergeAssessments(remote, local);
+    await saveLocalAssessmentHistorySnapshots(merged);
+    return merged;
+  } catch (error) {
+    if (local.length) return local;
+    throw error;
+  }
 }
 
 export async function getAssessment(id: string, deviceId: string) {
-  return req<Assessment>(`/assessments/${id}?device_id=${encodeURIComponent(deviceId)}`);
+  return normalizeAssessment(await req<unknown>(`/assessments/${id}?device_id=${encodeURIComponent(deviceId)}`));
 }
 
 export async function deleteAssessment(id: string, deviceId: string) {
@@ -261,8 +417,8 @@ export async function deleteAllMyData(deviceId: string) {
 }
 
 export async function resyncAssessment(id: string, deviceId: string) {
-  return req<Assessment>(
+  return normalizeAssessment(await req<unknown>(
     `/assessments/${id}/resync?device_id=${encodeURIComponent(deviceId)}`,
     { method: 'POST' }
-  );
+  ));
 }
